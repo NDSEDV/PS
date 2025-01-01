@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  Create your own Security
+  Windows Event and String Searcher
 .DESCRIPTION
   The tool is intended to help you with your dailiy business.
 .PARAMETER language
