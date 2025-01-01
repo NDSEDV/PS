@@ -11,7 +11,6 @@
   Creation Date:  2024-12-23
   Purpose/Change: Initial script development
   
-  Copyright (c) Jörn Walter. All rights reserved.
 #>
 # Function to check if the script is running with administrative privileges
 function Test-Admin {
