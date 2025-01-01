@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  Create your own Security
+  Create your own Security/Certificates
 .DESCRIPTION
   The tool is intended to help you with your dailiy business.
 .PARAMETER language
