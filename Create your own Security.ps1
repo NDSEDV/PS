@@ -77,7 +77,7 @@ $form.Controls.Add($tabControl)
 
 # Copyright Label
     $lblCopyright = New-Object System.Windows.Forms.Label
-    $lblCopyright.Text = "© 2025 Jörn Walter. Alle Rechte vorbehalten."
+    $lblCopyright.Text = "2025 Jörn Walter. Alle Rechte vorbehalten."
     $lblCopyright.AutoSize = $true
     $lblCopyright.Font = New-Object System.Drawing.Font("Arial", 8, [System.Drawing.FontStyle]::Italic)
     $lblCopyright.Location = New-Object System.Drawing.Point(10, 740)
