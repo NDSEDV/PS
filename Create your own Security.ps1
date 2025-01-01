@@ -10,9 +10,7 @@
   Author:         Jörn Walter
   Creation Date:  2024-12-23
   Purpose/Change: Initial script development
-  Update Date:    2024-12-24
-  Purpose/Change: Add new SMB Tab
-
+  
   Copyright (c) Jörn Walter. All rights reserved.
 #>
 # Function to check if the script is running with administrative privileges
