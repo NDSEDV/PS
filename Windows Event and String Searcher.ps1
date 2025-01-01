@@ -313,7 +313,7 @@ $tabPage3.Controls.Add($exportButton3)
 $copyrightLabel = New-Object System.Windows.Forms.Label
 $copyrightLabel.Location = New-Object System.Drawing.Point(0, 500)
 $copyrightLabel.Size = New-Object System.Drawing.Size(680, 40)
-$copyrightLabel.Text = "Copyright 2025 Jörn Walter`nhttps://www.der-windows-papst.de"
+$copyrightLabel.Text = "2025 Jörn Walter`nhttps://www.der-windows-papst.de"
 $copyrightLabel.TextAlign = [System.Drawing.ContentAlignment]::BottomRight
 $form.Controls.Add($copyrightLabel)
 
