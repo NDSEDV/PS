@@ -10,3 +10,6 @@ More information under: https://www.der-windows-papst.de/2024/12/17/self-signed-
 
 Service Prinicpal Manager.
 More Information under: https://www.der-windows-papst.de/2025/01/04/service-principal-name-manager/
+
+Change Default.rdp Window Size.
+https://www.der-windows-papst.de/2025/02/20/change-default-rdp-window-size/
