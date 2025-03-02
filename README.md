@@ -17,5 +17,5 @@ https://www.der-windows-papst.de/2025/02/20/change-default-rdp-window-size/
 RoboCopy GUI Tool
 https://www.der-windows-papst.de/2025/02/28/robocopy-powershell-gui/
 
-Windows Exchange Server Pre-Konfiguration
+Windows Exchange Server 2019 Pre-Konfiguration
 https://www.der-windows-papst.de/2025/03/02/windows-exchange-server-pre-konfiguration/
