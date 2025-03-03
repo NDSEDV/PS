@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Windows Exchange Server Pre-Konfiguration
 .DESCRIPTION
@@ -6,9 +6,9 @@
 .PARAMETER language
     The tool has a German edition but can also be used on English OS systems.
 .NOTES
-  Version:        1.0
+  Version:        1.1
   Author:         Jörn Walter
-  Creation Date:  2025-03-02
+  Creation Date:  2025-03-03
 
   Copyright (c) Jörn Walter. All rights reserved.
 #>
@@ -21,6 +21,8 @@ function Set-AutoStartAfterReboot {
         if (-not $scriptPath) {
             throw "Skriptpfad konnte nicht ermittelt werden."
         }
+
+        Ensure-RegistryPath
 
         # Batch-Datei erstellen, die das PowerShell-Skript ausführt
         $batchContent = @"
@@ -93,6 +95,31 @@ if (-not (Test-Admin)) {
     $newProcess.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`""
     [System.Diagnostics.Process]::Start($newProcess) | Out-Null
     exit
+}
+
+# Funktion zum Suchen nach UCMARedist\setup.exe auf allen Laufwerken
+function Find-UCMASetupExe {
+    try {
+        # Alle verfügbaren Laufwerke ermitteln
+        $drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -match "^\w:\\" }
+        
+        foreach ($drive in $drives) {
+            $driveLetter = $drive.Root.Substring(0, 2)
+            $setupPath = "$driveLetter\UCMARedist\setup.exe"
+            
+            # Prüfen, ob die Datei existiert
+            if (Test-Path $setupPath) {
+                return $setupPath
+            }
+        }
+        
+        # Nichts gefunden
+        return $null
+    }
+    catch {
+        Write-Error "Fehler bei der Suche nach UCMA Setup: $_"
+        return $null
+    }
 }
 
 Add-Type -AssemblyName System.Windows.Forms
@@ -263,7 +290,7 @@ function Test-RealtimeProtectionDisabled {
 # Erstellen des Hauptfensters
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Windows Exchange Server Pre-Konfiguration"
-$form.Size = New-Object System.Drawing.Size(510, 550)
+$form.Size = New-Object System.Drawing.Size(520, 605)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
@@ -286,14 +313,22 @@ $headerLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
 $headerPanel.Controls.Add($headerLabel)
 $form.Controls.Add($headerPanel)
 
-# Positionen der bestehenden Steuerelemente anpassen (um 40 Pixel nach unten verschieben)
-$buttonDisableRealtime.Location = New-Object System.Drawing.Point(50, 90)
-$buttonInstallFeatures.Location = New-Object System.Drawing.Point(50, 160)
-$buttonInstallVC.Location = New-Object System.Drawing.Point(50, 230)
-$buttonInstallVC2013.Location = New-Object System.Drawing.Point(50, 300)
-$buttonInstallURLRewrite.Location = New-Object System.Drawing.Point(50, 370)
-$copyrightLabel.Location = New-Object System.Drawing.Point(10, 420)
-$statusInfoLabel.Location = New-Object System.Drawing.Point(10, 460)
+# TabControl erstellen
+$tabControl = New-Object System.Windows.Forms.TabControl
+$tabControl.Location = New-Object System.Drawing.Point(0, 40) # Unterhalb des Header-Panels
+$tabControl.Size = New-Object System.Drawing.Size(500, 490)
+$tabControl.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right -bor [System.Windows.Forms.AnchorStyles]::Bottom
+$form.Controls.Add($tabControl)
+
+# Haupttab erstellen
+$tabMain = New-Object System.Windows.Forms.TabPage
+$tabMain.Text = "Hauptfunktionen"
+$tabControl.Controls.Add($tabMain)
+
+# UCMA-Tab erstellen
+$tabUCMA = New-Object System.Windows.Forms.TabPage
+$tabUCMA.Text = "UCMA Installation"
+$tabControl.Controls.Add($tabUCMA)
 
 # Erstellt den Buttons für die Deaktivierung des Echtzeitschutzes
 $buttonDisableRealtime = New-Object System.Windows.Forms.Button
@@ -316,7 +351,7 @@ $buttonDisableRealtime.Add_Click({
         [System.Windows.Forms.MessageBox]::Show("Fehler beim Deaktivieren des Echtzeitschutzes: $_", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
     }
 })
-$form.Controls.Add($buttonDisableRealtime)
+$tabMain.Controls.Add($buttonDisableRealtime)
 
 # Erstellen des Buttons für die Installation der Windows-Features
 $buttonInstallFeatures = New-Object System.Windows.Forms.Button
@@ -474,32 +509,31 @@ Add-WindowsFeature -Name `$features -IncludeManagementTools -Verbose
         }
         
         # Frage nach Neustart des Systems
-# Frage nach Neustart des Systems
-$restartResult = [System.Windows.Forms.MessageBox]::Show(
-    "Ein Neustart wird empfohlen, um die Installation der Windows-Features abzuschließen.`n`nMöchtest du den Computer jetzt neu starten?", 
-    "Neustart erforderlich", 
-    [System.Windows.Forms.MessageBoxButtons]::YesNo, 
-    [System.Windows.Forms.MessageBoxIcon]::Question)
-    
-# Führe Neustart durch, wenn gewünscht
-if ($restartResult -eq [System.Windows.Forms.DialogResult]::Yes) {
-    # Autostart vor dem Neustart einrichten
-    $autoStartSetup = Set-AutoStartAfterReboot
-    
-    if ($autoStartSetup) {
-        [System.Windows.Forms.MessageBox]::Show(
-            "Das Skript wird nach dem Neustart automatisch fortgesetzt.", 
-            "Autostart aktiviert", 
-            [System.Windows.Forms.MessageBoxButtons]::OK, 
-            [System.Windows.Forms.MessageBoxIcon]::Information)
-    }
-    
-    # Kurze Verzögerung, damit die Meldung angezeigt werden kann
-    Start-Sleep -Seconds 2
+        $restartResult = [System.Windows.Forms.MessageBox]::Show(
+            "Ein Neustart wird empfohlen, um die Installation der Windows-Features abzuschließen.`n`nMöchtest du den Computer jetzt neu starten?", 
+            "Neustart erforderlich", 
+            [System.Windows.Forms.MessageBoxButtons]::YesNo, 
+            [System.Windows.Forms.MessageBoxIcon]::Question)
             
-    # Starte Neustart-Prozess
-    Restart-Computer -Force
-}
+        # Führe Neustart durch, wenn gewünscht
+        if ($restartResult -eq [System.Windows.Forms.DialogResult]::Yes) {
+            # Autostart vor dem Neustart einrichten
+            $autoStartSetup = Set-AutoStartAfterReboot
+            
+            if ($autoStartSetup) {
+                [System.Windows.Forms.MessageBox]::Show(
+                    "Das Skript wird nach dem Neustart automatisch fortgesetzt.", 
+                    "Autostart aktiviert", 
+                    [System.Windows.Forms.MessageBoxButtons]::OK, 
+                    [System.Windows.Forms.MessageBoxIcon]::Information)
+            }
+            
+            # Kurze Verzögerung, damit die Meldung angezeigt werden kann
+            Start-Sleep -Seconds 2
+                    
+            # Starte Neustart-Prozess
+            Restart-Computer -Force
+        }
         else {
             # Wenn kein Neustart gewünscht, aktualisiere den UI-Status
             if (-not $featuresInstalled) {
@@ -525,7 +559,7 @@ if ($restartResult -eq [System.Windows.Forms.DialogResult]::Yes) {
         [System.Windows.Forms.MessageBox]::Show("Fehler bei der Installation der Windows-Features: $_ `n`nBitte versuche folgendes: `n1. Starte PowerShell als Administrator `n2. Führe 'Install-WindowsFeature Web-Server,NET-Framework-45-Features' aus", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
     }
 })
-$form.Controls.Add($buttonInstallFeatures)
+$tabMain.Controls.Add($buttonInstallFeatures)
 
 # Erstellen des Buttons für die Installation von Visual C++ 2012 Redistributable
 $buttonInstallVC = New-Object System.Windows.Forms.Button
@@ -592,7 +626,7 @@ $buttonInstallVC.Add_Click({
         [System.Windows.Forms.MessageBox]::Show("Fehler beim Herunterladen oder Installieren von Visual C++ 2012 Redistributable: $_", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
     }
 })
-$form.Controls.Add($buttonInstallVC)
+$tabMain.Controls.Add($buttonInstallVC)
 
 # Erstellen des Buttons für die Installation von Visual C++ 2013 Redistributable
 $buttonInstallVC2013 = New-Object System.Windows.Forms.Button
@@ -636,7 +670,7 @@ $buttonInstallVC2013.Add_Click({
         $statusForm.Close()
         $form.Enabled = $true
         
-if ($process.ExitCode -eq 0) {
+        if ($process.ExitCode -eq 0) {
             [System.Windows.Forms.MessageBox]::Show("Visual C++ 2013 Redistributable wurde erfolgreich installiert.", "Erfolg", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
             
             # Button deaktivieren nach erfolgreicher Installation
@@ -659,7 +693,7 @@ if ($process.ExitCode -eq 0) {
         [System.Windows.Forms.MessageBox]::Show("Fehler beim Herunterladen oder Installieren von Visual C++ 2013 Redistributable: $_", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
     }
 })
-$form.Controls.Add($buttonInstallVC2013)
+$tabMain.Controls.Add($buttonInstallVC2013)
 
 # Erstellen des Buttons für die Installation des IIS URL Rewrite Moduls
 $buttonInstallURLRewrite = New-Object System.Windows.Forms.Button
@@ -726,7 +760,7 @@ $buttonInstallURLRewrite.Add_Click({
         [System.Windows.Forms.MessageBox]::Show("Fehler beim Herunterladen oder Installieren des IIS URL Rewrite Moduls: $_", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
     }
 })
-$form.Controls.Add($buttonInstallURLRewrite)
+$tabMain.Controls.Add($buttonInstallURLRewrite)
 
 # Hilfe-Icons mit Tooltip
 $helpIcon = New-Object System.Windows.Forms.PictureBox
@@ -755,8 +789,8 @@ $helpLabel.Size = New-Object System.Drawing.Size(375, 20)
 $helpLabel.Text = "UCMARedist-Installation"
 $helpLabel.Font = New-Object System.Drawing.Font("Verdana", 9)
 
-$form.Controls.Add($helpIcon)
-$form.Controls.Add($helpLabel)
+$tabMain.Controls.Add($helpIcon)
+$tabMain.Controls.Add($helpLabel)
 
 # Hinzufügen eines Hinweises über Statusmeldungen
 $statusInfoLabel = New-Object System.Windows.Forms.Label
@@ -765,19 +799,196 @@ $statusInfoLabel.Size = New-Object System.Drawing.Size(480, 40)
 $statusInfoLabel.Text = "Info: Einige Warnmeldungen bezüglich IIS werden unterdrückt. Diese haben keinen Einfluss auf die Funktionalität."
 $statusInfoLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
 $statusInfoLabel.Font = New-Object System.Drawing.Font("Verdana", 8)
-$form.Controls.Add($statusInfoLabel)
+$tabMain.Controls.Add($statusInfoLabel)
+
+# Copyright Label erstellen
+$copyrightLabel = New-Object System.Windows.Forms.Label
+$copyrightLabel.Location = New-Object System.Drawing.Point(10, 535)
+$copyrightLabel.Size = New-Object System.Drawing.Size(480, 30)
+$copyrightLabel.Text = "© 2025 Jörn Walter https://www.der-windows-papst.de"
+$copyrightLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+$copyrightLabel.Font = New-Object System.Drawing.Font("Verdana", 8)
+$copyrightLabel.ForeColor = [System.Drawing.Color]::Gray
+$form.Controls.Add($copyrightLabel)
+
+# UCMA-Tab Steuerelemente erstellen
+$infoLabel = New-Object System.Windows.Forms.Label
+$infoLabel.Location = New-Object System.Drawing.Point(20, 20)
+$infoLabel.Size = New-Object System.Drawing.Size(460, 40)
+$infoLabel.Text = "Dieser Tab ermöglicht die Installation des UCMA Redistributable Pakets."
+$infoLabel.Font = New-Object System.Drawing.Font("Verdana", 10)
+$tabUCMA.Controls.Add($infoLabel)
+
+$instructionLabel = New-Object System.Windows.Forms.Label
+$instructionLabel.Location = New-Object System.Drawing.Point(20, 70)
+$instructionLabel.Size = New-Object System.Drawing.Size(460, 40)
+$instructionLabel.Text = "Legen Sie die Exchange-DVD ein oder mounten Sie die ISO-Datei."
+$instructionLabel.Font = New-Object System.Drawing.Font("Verdana", 9)
+$tabUCMA.Controls.Add($instructionLabel)
+
+$statusLabel = New-Object System.Windows.Forms.Label
+$statusLabel.Location = New-Object System.Drawing.Point(20, 120)
+$statusLabel.Size = New-Object System.Drawing.Size(100, 25)
+$statusLabel.Text = "Status:"
+$statusLabel.Font = New-Object System.Drawing.Font("Verdana", 9)
+$tabUCMA.Controls.Add($statusLabel)
+
+$statusText = New-Object System.Windows.Forms.Label
+$statusText.Location = New-Object System.Drawing.Point(120, 120)
+$statusText.Size = New-Object System.Drawing.Size(360, 25)
+$statusText.Text = "Bereit"
+$statusText.Font = New-Object System.Drawing.Font("Verdana", 9)
+$tabUCMA.Controls.Add($statusText)
+
+$pathLabel = New-Object System.Windows.Forms.Label
+$pathLabel.Location = New-Object System.Drawing.Point(20, 160)
+$pathLabel.Size = New-Object System.Drawing.Size(100, 25)
+$pathLabel.Text = "Setup-Pfad:"
+$pathLabel.Font = New-Object System.Drawing.Font("Verdana", 9)
+$tabUCMA.Controls.Add($pathLabel)
+
+$pathTextBox = New-Object System.Windows.Forms.TextBox
+$pathTextBox.Location = New-Object System.Drawing.Point(120, 160)
+$pathTextBox.Size = New-Object System.Drawing.Size(360, 25)
+$pathTextBox.ReadOnly = $true
+$pathTextBox.BackColor = [System.Drawing.SystemColors]::Window
+$tabUCMA.Controls.Add($pathTextBox)
+
+$searchButton = New-Object System.Windows.Forms.Button
+$searchButton.Location = New-Object System.Drawing.Point(20, 200)
+$searchButton.Size = New-Object System.Drawing.Size(200, 40)
+$searchButton.Text = "Nach UCMA suchen"
+$searchButton.Font = New-Object System.Drawing.Font("Verdana", 10, [System.Drawing.FontStyle]::Bold)
+$tabUCMA.Controls.Add($searchButton)
+
+$installButton = New-Object System.Windows.Forms.Button
+$installButton.Location = New-Object System.Drawing.Point(280, 200)
+$installButton.Size = New-Object System.Drawing.Size(200, 40)
+$installButton.Text = "UCMA installieren"
+$installButton.Font = New-Object System.Drawing.Font("Verdana", 10, [System.Drawing.FontStyle]::Bold)
+$installButton.Enabled = $false  # Initial deaktiviert
+$tabUCMA.Controls.Add($installButton)
+
+$progressBar = New-Object System.Windows.Forms.ProgressBar
+$progressBar.Location = New-Object System.Drawing.Point(20, 260)
+$progressBar.Size = New-Object System.Drawing.Size(460, 25)
+$progressBar.Style = [System.Windows.Forms.ProgressBarStyle]::Marquee
+$progressBar.MarqueeAnimationSpeed = 0  # Anfangs ausgeschaltet
+$tabUCMA.Controls.Add($progressBar)
+
+$resultLabel = New-Object System.Windows.Forms.Label
+$resultLabel.Location = New-Object System.Drawing.Point(20, 300)
+$resultLabel.Size = New-Object System.Drawing.Size(460, 25)
+$resultLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
+$resultLabel.Font = New-Object System.Drawing.Font("Verdana", 9)
+$tabUCMA.Controls.Add($resultLabel)
+
+# Suchbutton-Handler
+$searchButton.Add_Click({
+    # Status aktualisieren
+    $statusText.Text = "Suche nach UCMA Setup..."
+    $resultLabel.Text = ""
+    $pathTextBox.Text = ""
+    $installButton.Enabled = $false
+    $progressBar.MarqueeAnimationSpeed = 30  # Fortschrittsanzeige starten
+    
+    # UI aktualisieren
+    [System.Windows.Forms.Application]::DoEvents()
+    
+    # Suche nach Setup.exe
+    $setupPath = Find-UCMASetupExe
+    
+    # Fortschrittsanzeige stoppen
+    $progressBar.MarqueeAnimationSpeed = 0
+    
+    if ($setupPath -ne $null) {
+        $statusText.Text = "UCMA Setup gefunden"
+        $pathTextBox.Text = $setupPath
+        $installButton.Enabled = $true
+        $resultLabel.Text = "Setup.exe gefunden. Klicken Sie auf 'UCMA installieren'."
+        $resultLabel.ForeColor = [System.Drawing.Color]::Green
+    } else {
+        $statusText.Text = "UCMA Setup nicht gefunden"
+        $resultLabel.Text = "Setup.exe wurde nicht gefunden. Bitte lege die Exchange-DVD ein oder mounte die ISO."
+        $resultLabel.ForeColor = [System.Drawing.Color]::Red
+    }
+})
+
+# Installationsbutton-Handler
+$installButton.Add_Click({
+    $setupPath = $pathTextBox.Text
+    
+    if (-not [string]::IsNullOrEmpty($setupPath) -and (Test-Path $setupPath)) {
+        # UI-Status aktualisieren
+        $statusText.Text = "Installation läuft..."
+        $resultLabel.Text = "UCMA wird installiert, bitte warten..."
+        $resultLabel.ForeColor = [System.Drawing.Color]::Blue
+        $progressBar.MarqueeAnimationSpeed = 30
+        $searchButton.Enabled = $false
+        $installButton.Enabled = $false
+        
+        # UI aktualisieren
+        [System.Windows.Forms.Application]::DoEvents()
+        
+        try {
+            # Installation starten
+            $process = Start-Process -FilePath $setupPath -ArgumentList "/quiet", "/norestart" -PassThru -Wait
+            
+            # Fortschrittsanzeige stoppen
+            $progressBar.MarqueeAnimationSpeed = 0
+            
+            # Ergebnis anzeigen
+            if ($process.ExitCode -eq 0) {
+                $statusText.Text = "Installation erfolgreich"
+                $resultLabel.Text = "UCMA Redistributable wurde erfolgreich installiert."
+                $resultLabel.ForeColor = [System.Drawing.Color]::Green
+                $searchButton.Enabled = $true
+                [System.Windows.Forms.MessageBox]::Show("UCMA Redistributable wurde erfolgreich installiert.", "Erfolg", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            } else {
+                $statusText.Text = "Installationsfehler"
+                $resultLabel.Text = "Installation wurde mit Exit-Code $($process.ExitCode) abgeschlossen."
+                $resultLabel.ForeColor = [System.Drawing.Color]::Red
+                $searchButton.Enabled = $true
+                $installButton.Enabled = $true
+                [System.Windows.Forms.MessageBox]::Show("Die Installation wurde mit Exit-Code $($process.ExitCode) abgeschlossen. Möglicherweise sind zusätzliche Maßnahmen erforderlich.", "Warnung", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+            }
+        }
+        catch {
+            # Fehlerfall
+            $progressBar.MarqueeAnimationSpeed = 0
+            $statusText.Text = "Fehler"
+            $resultLabel.Text = "Fehler bei der Installation: $_"
+            $resultLabel.ForeColor = [System.Drawing.Color]::Red
+            $searchButton.Enabled = $true
+            $installButton.Enabled = $true
+            [System.Windows.Forms.MessageBox]::Show("Fehler bei der Installation: $_", "Fehler", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        }
+    } else {
+        $resultLabel.Text = "Setup-Pfad ist nicht mehr gültig. Bitte erneut suchen."
+        $resultLabel.ForeColor = [System.Drawing.Color]::Red
+        $installButton.Enabled = $false
+    }
+})
+
+# Tab automatisch prüfen, wenn er ausgewählt wird
+$tabUCMA.Add_Enter({
+    # Auto-Suche beim Betreten des Tabs, falls noch nicht durchgeführt
+    if ([string]::IsNullOrEmpty($pathTextBox.Text)) {
+        $searchButton.PerformClick()
+    }
+})
 
 # Anzeigen des Formulars
 $form.Add_Shown({
     # Prüfen, ob es sich um eine Ausführung nach dem Neustart handelt
     $isPostReboot = $false
     if (Test-Path "HKCU:\Software\ExchangeRequirements") {
-    $isPostReboot = (Get-ItemProperty -Path "HKCU:\Software\ExchangeRequirements" -Name "PostRebootExecution" -ErrorAction SilentlyContinue).PostRebootExecution -eq $true
-}
+        $isPostReboot = (Get-ItemProperty -Path "HKCU:\Software\ExchangeRequirements" -Name "PostRebootExecution" -ErrorAction SilentlyContinue).PostRebootExecution -eq $true
+    }
 
-# Autostart-Eintrag entfernen, um zukünftige automatische Starts zu verhindern
-Remove-AutoStartAfterReboot
-    
+    # Autostart-Eintrag entfernen, um zukünftige automatische Starts zu verhindern
+    Remove-AutoStartAfterReboot
+        
     # Definiere erforderliche Features für die Prüfung
     $requiredFeatures = @(
         "NET-Framework-45-Features", 
@@ -818,29 +1029,18 @@ Remove-AutoStartAfterReboot
         $buttonInstallURLRewrite.Text = "IIS URL Rewrite Modul bereits installiert"
     }
     
-
     # Wenn es sich um eine Ausführung nach dem Neustart handelt, den Benutzer informieren
-if ($isPostReboot) {
-    [System.Windows.Forms.MessageBox]::Show(
-        "Das Skript wurde nach dem Neustart automatisch gestartet.", 
-        "Nach Neustart", 
-        [System.Windows.Forms.MessageBoxButtons]::OK, 
-        [System.Windows.Forms.MessageBoxIcon]::Information)
-}
-
+    if ($isPostReboot) {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Das Skript wurde nach dem Neustart automatisch gestartet.", 
+            "Nach Neustart", 
+            [System.Windows.Forms.MessageBoxButtons]::OK, 
+            [System.Windows.Forms.MessageBoxIcon]::Information)
+    }
 
     $statusInfoLabel.Text = "Status-Überprüfung abgeschlossen. Du kannst fortfahren."
     $form.Activate()
 })
-
-$copyrightLabel = New-Object System.Windows.Forms.Label
-$copyrightLabel.Location = New-Object System.Drawing.Point(10, 470)
-$copyrightLabel.Size = New-Object System.Drawing.Size(480, 30)
-$copyrightLabel.Text = "© 2025 Jörn Walter https://www.der-windows-papst.de"
-$copyrightLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
-$copyrightLabel.Font = New-Object System.Drawing.Font("Verdana", 8)
-$copyrightLabel.ForeColor = [System.Drawing.Color]::Gray
-$form.Controls.Add($copyrightLabel)
 
 # Starte das Formular
 [void] $form.ShowDialog()
