@@ -822,7 +822,7 @@ $tabUCMA.Controls.Add($infoLabel)
 $instructionLabel = New-Object System.Windows.Forms.Label
 $instructionLabel.Location = New-Object System.Drawing.Point(20, 70)
 $instructionLabel.Size = New-Object System.Drawing.Size(460, 40)
-$instructionLabel.Text = "Legen Sie die Exchange-DVD ein oder mounten Sie die ISO-Datei."
+$instructionLabel.Text = "Lege die Exchange-DVD ein oder mounte die ISO-Datei."
 $instructionLabel.Font = New-Object System.Drawing.Font("Verdana", 9)
 $tabUCMA.Controls.Add($instructionLabel)
 
