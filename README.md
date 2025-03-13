@@ -19,3 +19,6 @@ https://www.der-windows-papst.de/2025/02/28/robocopy-powershell-gui/
 
 Windows Exchange Server 2019 Pre-Konfiguration
 https://www.der-windows-papst.de/2025/03/02/windows-exchange-server-pre-konfiguration/
+
+SMIME CSR Generator and PEM to PFX Converter
+https://www.der-windows-papst.de/2025/03/13/smime-csr-generator-and-pem-to-pfx-converter/
