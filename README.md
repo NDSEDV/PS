@@ -22,3 +22,6 @@ https://www.der-windows-papst.de/2025/03/02/windows-exchange-server-pre-konfigur
 
 SMIME CSR Generator and PEM to PFX Converter
 https://www.der-windows-papst.de/2025/03/13/smime-csr-generator-and-pem-to-pfx-converter/
+
+Sign your Script with Powershell Script Signer
+https://www.der-windows-papst.de/2025/03/19/powershell-script-signer/
