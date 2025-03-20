@@ -25,3 +25,6 @@ https://www.der-windows-papst.de/2025/03/13/smime-csr-generator-and-pem-to-pfx-c
 
 Sign your Script with Powershell Script Signer
 https://www.der-windows-papst.de/2025/03/19/powershell-script-signer/
+
+Sort your Files
+https://www.der-windows-papst.de/2025/03/20/dateien-automatisch-sortieren-nach-endungen-oder-datum/
