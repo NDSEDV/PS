@@ -1,15 +1,15 @@
-﻿<#
+<#
 .SYNOPSIS
   Sort your files
 .DESCRIPTION
-  The tool has a German edition but can also be used on English OS systems.The tool is intended to help you with your daily business.
+  The tool has a German edition but can also be used on English OS systems. The tool is intended to help you with your daily business.
   This script allows you to copy files from a source folder to a destination folder with the option to sort the files by file extension or by year/month
 .PARAMETER language
 .NOTES
-  Version:        1.1
+  Version:        1.2
   Author:         Jörn Walter
   Creation Date:  2025-03-20
-  Purpose/Change: Added recursive folder option
+  Purpose/Change: Added source folder cleanup function
   
   Copyright (c) Jörn Walter. All rights reserved.
 #>
@@ -44,10 +44,13 @@ Add-Type -AssemblyName System.Drawing
 # Variable für Abbruch-Status
 $global:abbrechenAngefordert = $false
 
+# Variable fürs Tracking der Verarbeitung
+$global:verarbeiteteDataien = @()
+
 # Hauptfenster erstellen
 $formMain = New-Object System.Windows.Forms.Form
 $formMain.Text = "Sort your files"
-$formMain.Size = New-Object System.Drawing.Size(600, 630)
+$formMain.Size = New-Object System.Drawing.Size(600, 650)
 $formMain.StartPosition = "CenterScreen"
 $formMain.Font = New-Object System.Drawing.Font("Segoe UI", 10)
 
@@ -153,15 +156,23 @@ $checkBoxUeberspringen.Text = "Bereits vorhandene Dateien überspringen (beschle
 $checkBoxUeberspringen.Checked = $true
 $formMain.Controls.Add($checkBoxUeberspringen)
 
+# Cleanup Option
+$checkBoxBereinigen = New-Object System.Windows.Forms.CheckBox
+$checkBoxBereinigen.Location = New-Object System.Drawing.Point(30, 280)
+$checkBoxBereinigen.Size = New-Object System.Drawing.Size(540, 30)
+$checkBoxBereinigen.Text = "Quellordner nach erfolgreicher Verarbeitung bereinigen (Dateien löschen)"
+$checkBoxBereinigen.Checked = $false
+$formMain.Controls.Add($checkBoxBereinigen)
+
 # Dateiliste
 $labelDateien = New-Object System.Windows.Forms.Label
-$labelDateien.Location = New-Object System.Drawing.Point(20, 285)
+$labelDateien.Location = New-Object System.Drawing.Point(20, 315)
 $labelDateien.Size = New-Object System.Drawing.Size(200, 23)
 $labelDateien.Text = "Gefundene Dateien:"
 $formMain.Controls.Add($labelDateien)
 
 $listBoxDateien = New-Object System.Windows.Forms.ListBox
-$listBoxDateien.Location = New-Object System.Drawing.Point(20, 310)
+$listBoxDateien.Location = New-Object System.Drawing.Point(20, 340)
 $listBoxDateien.Size = New-Object System.Drawing.Size(540, 130)
 $formMain.Controls.Add($listBoxDateien)
 
@@ -174,7 +185,7 @@ $formMain.Controls.Add($statusStrip)
 
 # Fortschrittsbalken
 $progressBar = New-Object System.Windows.Forms.ProgressBar
-$progressBar.Location = New-Object System.Drawing.Point(20, 455)
+$progressBar.Location = New-Object System.Drawing.Point(20, 475)
 $progressBar.Size = New-Object System.Drawing.Size(200, 30)
 $progressBar.Minimum = 0
 $progressBar.Maximum = 100
@@ -183,14 +194,14 @@ $formMain.Controls.Add($progressBar)
 
 # Fortschrittsanzeige-Label
 $labelFortschritt = New-Object System.Windows.Forms.Label
-$labelFortschritt.Location = New-Object System.Drawing.Point(230, 450)
+$labelFortschritt.Location = New-Object System.Drawing.Point(230, 470)
 $labelFortschritt.Size = New-Object System.Drawing.Size(330, 35)
 $labelFortschritt.Text = "0 von 0 Dateien kopiert"
 $formMain.Controls.Add($labelFortschritt)
 
 # Copyright-Label hinzufügen
 $labelCopyright = New-Object System.Windows.Forms.Label
-$labelCopyright.Location = New-Object System.Drawing.Point(20, 540)
+$labelCopyright.Location = New-Object System.Drawing.Point(20, 560)
 $labelCopyright.Size = New-Object System.Drawing.Size(540, 23)
 $labelCopyright.Text = "© 2025 Jörn Walter - https://www-der-windows-papst.de"
 $labelCopyright.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
@@ -198,7 +209,7 @@ $formMain.Controls.Add($labelCopyright)
 
 # Start-Button
 $buttonStart = New-Object System.Windows.Forms.Button
-$buttonStart.Location = New-Object System.Drawing.Point(180, 500)
+$buttonStart.Location = New-Object System.Drawing.Point(180, 520)
 $buttonStart.Size = New-Object System.Drawing.Size(120, 30)
 $buttonStart.Text = "Starten"
 $buttonStart.Add_Click({
@@ -228,6 +239,8 @@ $buttonStart.Add_Click({
                 Gesamt = 0
                 Kopiert = 0
                 Uebersprungen = 0
+                Geloescht = 0
+                LoeschFehler = 0
             }
         } else {
             if ($radioButtonDateiendung.Checked) {
@@ -243,7 +256,8 @@ $buttonStart.Add_Click({
                 "Vorgang wurde abgebrochen!`n`n" +
                 "Gefundene Dateien: $($ergebnis.Gesamt)`n" +
                 "Kopierte Dateien: $($ergebnis.Kopiert)`n" +
-                "Übersprungene Dateien: $($ergebnis.Uebersprungen)", 
+                "Übersprungene Dateien: $($ergebnis.Uebersprungen)" +
+                $(if ($checkBoxBereinigen.Checked) { "`nGelöschte Dateien: $($ergebnis.Geloescht)`nFehler beim Löschen: $($ergebnis.LoeschFehler)" } else { "" }), 
                 "Abgebrochen", 
                 [System.Windows.Forms.MessageBoxButtons]::OK, 
                 [System.Windows.Forms.MessageBoxIcon]::Information)
@@ -253,7 +267,8 @@ $buttonStart.Add_Click({
                 "Verarbeitung abgeschlossen!`n`n" +
                 "Gefundene Dateien: $($ergebnis.Gesamt)`n" +
                 "Kopierte Dateien: $($ergebnis.Kopiert)`n" +
-                "Übersprungene Dateien: $($ergebnis.Uebersprungen)", 
+                "Übersprungene Dateien: $($ergebnis.Uebersprungen)" +
+                $(if ($checkBoxBereinigen.Checked) { "`nGelöschte Dateien: $($ergebnis.Geloescht)`nFehler beim Löschen: $($ergebnis.LoeschFehler)" } else { "" }), 
                 "Erfolg", 
                 [System.Windows.Forms.MessageBoxButtons]::OK, 
                 [System.Windows.Forms.MessageBoxIcon]::Information)
@@ -275,7 +290,7 @@ $formMain.Controls.Add($buttonStart)
 
 # Abbrechen-Button hinzufügen
 $buttonAbbrechen = New-Object System.Windows.Forms.Button
-$buttonAbbrechen.Location = New-Object System.Drawing.Point(310, 500)
+$buttonAbbrechen.Location = New-Object System.Drawing.Point(310, 520)
 $buttonAbbrechen.Size = New-Object System.Drawing.Size(120, 30)
 $buttonAbbrechen.Text = "Abbrechen"
 $buttonAbbrechen.Enabled = $false
@@ -289,8 +304,6 @@ $buttonAbbrechen.Add_Click({
     }
 })
 $formMain.Controls.Add($buttonAbbrechen)
-
-# Funktionen
 
 # Funktion zum Aktualisieren der Dateiliste
 function AktualisiereDateiliste {
@@ -349,6 +362,9 @@ function SortiereNachDateiendung {
     $quellOrdner = $textBoxQuelle.Text
     $zielOrdner = $textBoxZiel.Text
     $ueberspringen = $checkBoxUeberspringen.Checked
+    
+    # Clear the processed files list at the beginning
+    $global:verarbeiteteDataien = @()
     
     # Dateien wurden bereits in der ListBox erfasst - wir verwenden diese statt erneut zu scannen
     $gesamtDateien = $listBoxDateien.Items.Count
@@ -425,6 +441,9 @@ function SortiereNachDateiendung {
             $kopierteAnzahl++
         }
         
+        # Track processed file regardless of whether it was copied or skipped
+        $global:verarbeiteteDataien += $datei.FullName
+        
         # Fortschritt aktualisieren
         $bearbeiteteAnzahl = $kopierteAnzahl + $uebersprungeneAnzahl
         $progressBar.Value = $bearbeiteteAnzahl
@@ -439,10 +458,24 @@ function SortiereNachDateiendung {
         }
     }
     
+    # Call the cleanup function if option is checked and no abort was requested
+    if ($checkBoxBereinigen.Checked -and -not $global:abbrechenAngefordert) {
+        $ergebnisCleanup = BereinigeQuellordner
+        return @{
+            Gesamt = $gesamtDateien
+            Kopiert = $kopierteAnzahl
+            Uebersprungen = $uebersprungeneAnzahl
+            Geloescht = $ergebnisCleanup.Geloescht
+            LoeschFehler = $ergebnisCleanup.Fehler
+        }
+    }
+    
     return @{
         Gesamt = $gesamtDateien
         Kopiert = $kopierteAnzahl
         Uebersprungen = $uebersprungeneAnzahl
+        Geloescht = 0
+        LoeschFehler = 0
     }
 }
 
@@ -451,6 +484,9 @@ function SortiereNachDatum {
     $quellOrdner = $textBoxQuelle.Text
     $zielOrdner = $textBoxZiel.Text
     $ueberspringen = $checkBoxUeberspringen.Checked
+    
+    # Clear the processed files list at the beginning
+    $global:verarbeiteteDataien = @()
     
     # Dateien wurden bereits in der ListBox erfasst - wir verwenden diese statt erneut zu scannen
     $gesamtDateien = $listBoxDateien.Items.Count
@@ -529,6 +565,10 @@ function SortiereNachDatum {
             $kopierteAnzahl++
         }
         
+        # Track processed file regardless of whether it was copied or skipped
+        # Use a different approach to add to the array to ensure it works
+        $global:verarbeiteteDataien = $global:verarbeiteteDataien + @($datei.FullName)
+        
         # Fortschritt aktualisieren
         $bearbeiteteAnzahl = $kopierteAnzahl + $uebersprungeneAnzahl
         $progressBar.Value = $bearbeiteteAnzahl
@@ -543,10 +583,123 @@ function SortiereNachDatum {
         }
     }
     
+# Ruft die Bereinigungsfunktion auf, wenn die Option aktiviert ist und kein Abbruch angefordert wurde
+    if ($checkBoxBereinigen.Checked -and -not $global:abbrechenAngefordert) {
+        $ergebnisCleanup = BereinigeQuellordner
+        return @{
+            Gesamt = $gesamtDateien
+            Kopiert = $kopierteAnzahl
+            Uebersprungen = $uebersprungeneAnzahl
+            Geloescht = $ergebnisCleanup.Geloescht
+            LoeschFehler = $ergebnisCleanup.Fehler
+        }
+    }
+    
     return @{
         Gesamt = $gesamtDateien
         Kopiert = $kopierteAnzahl
         Uebersprungen = $uebersprungeneAnzahl
+        Geloescht = 0
+        LoeschFehler = 0
+    }
+}
+
+# Add the new cleanup function
+function BereinigeQuellordner {
+    # Log function entry and array count
+    $countVerarbeitete = $global:verarbeiteteDataien.Count
+    
+    if ($countVerarbeitete -eq 0) {
+        return @{
+            Geloescht = 0
+            Fehler = 0
+        }
+    }
+    
+    $statusLabel.Text = "Bereinige Quellordner..."
+    $progressBar.Maximum = $countVerarbeitete
+    $progressBar.Value = 0
+    $labelFortschritt.Text = "0 von $countVerarbeitete Dateien gelöscht"
+    $formMain.Refresh()
+    
+    $geloeschteDateien = 0
+    $fehlerBeimLoeschen = 0
+    
+    # Create a copy of the array to work with
+    $zuLoeschendeDateien = $global:verarbeiteteDataien.Clone()
+    
+    foreach ($dateiPfad in $zuLoeschendeDateien) {
+        if ($global:abbrechenAngefordert) {
+            break
+        }
+        
+        try {
+            if (Test-Path -Path $dateiPfad) {
+                Remove-Item -Path $dateiPfad -Force
+                $geloeschteDateien++
+            }
+        }
+        catch {
+            $fehlerBeimLoeschen++
+            # Log the error
+        }
+        
+        $progressBar.Value = $geloeschteDateien
+        $labelFortschritt.Text = "$geloeschteDateien von $countVerarbeitete Dateien gelöscht"
+        [System.Windows.Forms.Application]::DoEvents()
+    }
+    
+    # After deleting files, remove empty folders (optional)
+    if (-not $global:abbrechenAngefordert) {
+        BereinigeLeereOrdner
+    }
+    
+    $statusLabel.Text = "Bereinigung abgeschlossen"
+    
+    if ($fehlerBeimLoeschen -gt 0) {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Quellordner teilweise bereinigt!`n`n" +
+            "Gelöschte Dateien: $geloeschteDateien`n" +
+            "Fehler beim Löschen: $fehlerBeimLoeschen", 
+            "Bereinigung mit Einschränkungen", 
+            [System.Windows.Forms.MessageBoxButtons]::OK, 
+            [System.Windows.Forms.MessageBoxIcon]::Warning)
+    }
+    
+    return @{
+        Geloescht = $geloeschteDateien
+        Fehler = $fehlerBeimLoeschen
+    }
+}
+
+# Function to clean up empty folders
+function BereinigeLeereOrdner {
+    $quellOrdner = $textBoxQuelle.Text
+    $statusLabel.Text = "Entferne leere Ordner..."
+    $formMain.Refresh()
+    
+    # Get all subdirectories
+    if ($checkBoxRekursiv.Checked) {
+        $alleOrdner = Get-ChildItem -Path $quellOrdner -Directory -Recurse | Sort-Object -Property FullName -Descending
+        
+        foreach ($ordner in $alleOrdner) {
+            if ($global:abbrechenAngefordert) {
+                break
+            }
+            
+            try {
+                # Check if the folder is empty (no files and no subdirectories)
+                $ordnerInhalt = Get-ChildItem -Path $ordner.FullName -Force
+                if ($null -eq $ordnerInhalt -or $ordnerInhalt.Count -eq 0) {
+                    Remove-Item -Path $ordner.FullName -Force
+                }
+            }
+            catch {
+                # Log error
+            }
+            
+            [System.Windows.Forms.Application]::DoEvents()
+        }
     }
 }
 
