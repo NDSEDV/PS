@@ -28,3 +28,6 @@ https://www.der-windows-papst.de/2025/03/19/powershell-script-signer/
 
 Sort your Files
 https://www.der-windows-papst.de/2025/03/20/dateien-automatisch-sortieren-nach-endungen-oder-datum/
+
+Powershell Uninstaller
+https://www.der-windows-papst.de/2025/03/30/powershell-uninstaller/
