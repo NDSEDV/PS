@@ -32,5 +32,5 @@ More Information under: https://www.der-windows-papst.de/2025/03/20/dateien-auto
 Powershell Uninstaller
 More Information under: https://www.der-windows-papst.de/2025/03/30/powershell-uninstaller/
 
-Domain Controller showing network connection as Public or Privat
-More Information under: https://www.der-windows-papst.de/2025/04/21/domain-controller-showing-network-connection-as-public-or-privat/
+Domain Controller showing network connection as Public or Private
+More Information under: https://www.der-windows-papst.de/2025/04/21/domain-controller-showing-network-connection-as-public-or-private/
