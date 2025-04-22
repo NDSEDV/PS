@@ -71,7 +71,7 @@ function Write-DebugLog {
 #region UI-Erstellung
 # Erstellen des Hauptfensters
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Aktive Netzwerkkarten"
+$form.Text = "Manage the Networkcards from DC"
 $form.Size = New-Object System.Drawing.Size(1100, 600)
 $form.StartPosition = "CenterScreen"
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
