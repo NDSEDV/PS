@@ -34,3 +34,6 @@ More Information under: https://www.der-windows-papst.de/2025/03/30/powershell-u
 
 Domain Controller showing network connection as Public or Private
 More Information under: https://www.der-windows-papst.de/2025/04/21/domain-controller-showing-network-connection-as-public-or-private/
+
+Check and Clean AdminCount
+https://www.der-windows-papst.de/2025/05/02/check-and-clean-admincount/
