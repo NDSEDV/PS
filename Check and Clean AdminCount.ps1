@@ -552,7 +552,7 @@ $logPanel.Dock = [System.Windows.Forms.DockStyle]::None
 # Feste Werte für Position und Größe
 $panelTop = 450  # Position von oben
 $logPanel.Location = New-Object System.Drawing.Point(10, $panelTop)
-$logPanel.Size = New-Object System.Drawing.Size(860, 200)  # Breite 860, Höhe 200
+$logPanel.Size = New-Object System.Drawing.Size(860, 200)
 $logPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor 
                    [System.Windows.Forms.AnchorStyles]::Bottom -bor 
                    [System.Windows.Forms.AnchorStyles]::Left -bor 
@@ -570,7 +570,7 @@ $logPanel.Controls.Add($global:logTextBox)
 # Copyright-Panel mit fester Position
 $copyrightPanel = New-Object System.Windows.Forms.Panel
 $copyrightPanel.Dock = [System.Windows.Forms.DockStyle]::None
-$copyrightPanel.Location = New-Object System.Drawing.Point(10, 655)  # Feste Position von oben
+$copyrightPanel.Location = New-Object System.Drawing.Point(10, 655)
 $copyrightPanel.Size = New-Object System.Drawing.Size(860, 30)  # Breite 860, Höhe 30
 $copyrightPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Bottom -bor 
                          [System.Windows.Forms.AnchorStyles]::Left -bor 
@@ -579,7 +579,7 @@ $mainPanel.Controls.Add($copyrightPanel)
 
 # Copyright-Label
 $copyrightLabel = New-Object System.Windows.Forms.Label
-$copyrightLabel.Text = "© $(Get-Date -Format 'yyyy') Jörn Walter - https://www.der-windows-papst.de."
+$copyrightLabel.Text = "$(Get-Date -Format 'yyyy') Jörn Walter - https://www.der-windows-papst.de."
 $copyrightLabel.Dock = [System.Windows.Forms.DockStyle]::Fill
 $copyrightLabel.TextAlign = [System.Drawing.ContentAlignment]::MiddleCenter
 $copyrightLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8)
@@ -589,7 +589,7 @@ $copyrightPanel.Controls.Add($copyrightLabel)
 # Domänenname anzeigen
 $domainInfoLabel = New-Object System.Windows.Forms.Label
 $domainInfoLabel.Text = "Aktuelle Domäne: $((Get-ADDomain).DNSRoot)"
-$domainInfoLabel.Location = New-Object System.Drawing.Point(10, 625)  # Position anpassen
+$domainInfoLabel.Location = New-Object System.Drawing.Point(10, 625)
 $domainInfoLabel.Size = New-Object System.Drawing.Size(500, 20)
 $domainInfoLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Italic)
 $domainInfoLabel.ForeColor = [System.Drawing.Color]::Navy
