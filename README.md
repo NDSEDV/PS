@@ -37,3 +37,6 @@ More Information under: https://www.der-windows-papst.de/2025/04/21/domain-contr
 
 Check and Clean AdminCount
 https://www.der-windows-papst.de/2025/05/02/check-and-clean-admincount/
+
+IIS Inetpub Folder ACL Manager
+https://www.der-windows-papst.de/2025/06/07/iis-inetpub-folder-acl-manager/
