@@ -7,7 +7,7 @@
 .PARAMETER language
     The tool has a German edition but can also be used on English OS systems.
 .NOTES
-  Version:        1.0
+  Version:        1.1
   Author:         Jörn Walter
   Creation Date:  2025-06-07
 
@@ -792,7 +792,7 @@ $infoButton.BackColor = [System.Drawing.Color]::LightSteelBlue
 $infoButton.Add_Click({
     $infoText = @"
 IIS Inetpub Folder ACL Manager
-Version 1.0 - 2025
+Version 1.1 - 2025
 
 === ENTWICKLER ===
 © 2025 Jörn Walter
@@ -810,10 +810,10 @@ Dieses Tool basiert auf dem ursprünglichen PowerShell-Skript von Microsoft zur 
 • Automatische Log-Datei-Erstellung
 
 === VERWENDUNG ===
-1. Starten Sie das Programm als Administrator
-2. Überprüfen Sie die automatische Analyse
-3. Verwenden Sie "Simulation" zum Testen ohne Änderungen
-4. Klicken Sie "Ausführen" für die tatsächliche Anwendung
+1. Starte das Programm als Administrator
+2. Überprüfe  die automatische Analyse
+3. Verwende "Simulation" zum Testen ohne Änderungen
+4. Klicke "Ausführen" für die tatsächliche Anwendung
 5. Alle Aktionen werden protokolliert und können in der Log-Datei nachverfolgt werden
 
 === SICHERHEITSHINWEISE ===
@@ -1049,7 +1049,7 @@ $form.Add_Shown({
     # Prüfe Administrator-Rechte beim Start
     if (-not (Test-AdminRights)) {
         [System.Windows.Forms.MessageBox]::Show(
-            "Dieses Programm benötigt Administrator-Rechte. Bitte starten Sie PowerShell als Administrator und führen Sie das Skript erneut aus.",
+            "Dieses Programm benötigt Administrator-Rechte. Bitte starte die PowerShell als Administrator und führe das Skript erneut aus.",
             "Administrator-Rechte erforderlich",
             [System.Windows.Forms.MessageBoxButtons]::OK,
             [System.Windows.Forms.MessageBoxIcon]::Warning
@@ -1065,7 +1065,7 @@ $form.Add_Shown({
                 Add-LogEntry "SUCCESS" "System-Analyse abgeschlossen. Bereit für Skript-Ausführung."
                 Add-LogEntry "INFO" "Alle Logs werden auch in die Datei geschrieben: $script:logFilePath"
             } else {
-                Add-LogEntry "FEHLER" "System-Analyse ergab kritische Probleme. Bitte prüfen Sie die Meldungen."
+                Add-LogEntry "FEHLER" "System-Analyse ergab kritische Probleme. Bitte prüfe die Meldungen."
             }
         } catch {
             Add-LogEntry "FEHLER" "Fehler bei der System-Analyse: $($_.Exception.Message)"
