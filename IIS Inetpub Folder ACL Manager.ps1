@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   IIS Inetpub Folder ACL Manager
 .DESCRIPTION
@@ -413,124 +413,121 @@ function Get-FolderAnalysis {
     return $analysis
 }
 
+# Die korrigierte Show-InitialAnalysis Funktion
 function Show-InitialAnalysis {
     Add-LogEntry "INFO" "=== SYSTEM-ANALYSE BEIM START ==="
     
-    # Definiere Pfade und SDDL
+    # Definiere Pfade und SDDL - NUR für inetpub!
     $systemDrive = $env:SystemDrive
     $inetpubPath = Join-Path -Path $systemDrive\ -ChildPath "inetpub"
     $dhaPath = Join-Path -Path $inetpubPath\ -ChildPath "DeviceHealthAttestation"
     $dhabinPath = Join-Path -Path $dhaPath\ -ChildPath 'bin'
     $sddlInetpub = "O:SYG:SYD:P(A;CIOI;GA;;;S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464)(A;CIOI;GA;;;SY)(A;CIOI;GA;;;BA)(A;CIOI;GRGX;;;BU)(A;CIOI;GA;;;CO)"
     
-    # Analysiere alle relevanten Ordner
+    # Analysiere NUR den Hauptordner inetpub
     $inetpubAnalysis = Get-FolderAnalysis -FolderPath $inetpubPath -TargetSddl $sddlInetpub -FolderName "inetpub"
-    $dhaAnalysis = Get-FolderAnalysis -FolderPath $dhaPath -TargetSddl $sddlInetpub -FolderName "DeviceHealthAttestation"
-    $dhabinAnalysis = Get-FolderAnalysis -FolderPath $dhabinPath -TargetSddl $sddlInetpub -FolderName "DeviceHealthAttestation\bin"
     
-    # Zeige Ergebnisse
-    $analyses = @($inetpubAnalysis, $dhaAnalysis, $dhabinAnalysis)
+    # Prüfe optionale Unterordner nur auf Existenz (ohne Berechtigungsanalyse)
+    $dhaExists = Test-Path -Path $dhaPath
+    $dhabinExists = Test-Path -Path $dhabinPath
     
-    foreach ($analysis in $analyses) {
-        Add-LogEntry "INFO" "--- ANALYSE: $($analysis.Name) ---"
-        Add-LogEntry "INFO" "Pfad: $($analysis.Path)"
-        
-        if ($analysis.Exists) {
-            if ($analysis.IsAccessible) {
-                Add-LogEntry "SUCCESS" "✓ Ordner existiert und ist zugänglich"
-                
-                if ($analysis.HasReparsePoint) {
-                    Add-LogEntry "WARNUNG" "⚠ Reparse Point erkannt - Skript wird nicht ausgeführt"
-                }
-                
-                if ($analysis.IsEmpty) {
-                    Add-LogEntry "INFO" "📁 Ordner ist leer"
+    # Zeige Hauptanalyse für inetpub
+    Add-LogEntry "INFO" "--- ANALYSE: $($inetpubAnalysis.Name) ---"
+    Add-LogEntry "INFO" "Pfad: $($inetpubAnalysis.Path)"
+    
+    if ($inetpubAnalysis.Exists) {
+        if ($inetpubAnalysis.IsAccessible) {
+            Add-LogEntry "SUCCESS" "✓ Ordner existiert und ist zugänglich"
+            
+            if ($inetpubAnalysis.HasReparsePoint) {
+                Add-LogEntry "WARNUNG" "⚠ Reparse Point erkannt - Skript wird nicht ausgeführt"
+                return $false
+            }
+            
+            if ($inetpubAnalysis.IsEmpty) {
+                Add-LogEntry "INFO" "📁 Ordner ist leer"
+            } else {
+                Add-LogEntry "INFO" "📁 Ordner enthält: $($inetpubAnalysis.SubFolders -join ', ')"
+            }
+            
+            # Zeige Berechtigungsvergleich NUR für inetpub
+            if ($inetpubAnalysis.Comparison) {
+                if ($inetpubAnalysis.Comparison.IsIdentical) {
+                    Add-LogEntry "SUCCESS" "✓ Berechtigungen sind bereits korrekt gesetzt!"
+                    Add-LogEntry "INFO" "Übereinstimmende Berechtigungen:"
+                    foreach ($match in $inetpubAnalysis.Comparison.Matches) {
+                        Add-LogEntry "SUCCESS" "  $match"
+                    }
                 } else {
-                    Add-LogEntry "INFO" "📁 Ordner enthält: $($analysis.SubFolders -join ', ')"
-                }
-                
-                # Zeige Berechtigungsvergleich
-                if ($analysis.Comparison) {
-                    if ($analysis.Comparison.IsIdentical) {
-                        Add-LogEntry "SUCCESS" "✓ Berechtigungen sind bereits korrekt gesetzt!"
-                        Add-LogEntry "INFO" "Übereinstimmende Berechtigungen:"
-                        foreach ($match in $analysis.Comparison.Matches) {
+                    Add-LogEntry "WARNUNG" "⚠ Berechtigungen für inetpub weichen ab - Änderungen erforderlich"
+                    
+                    if ($inetpubAnalysis.Comparison.Matches.Count -gt 0) {
+                        Add-LogEntry "INFO" "Korrekte Berechtigungen:"
+                        foreach ($match in $inetpubAnalysis.Comparison.Matches) {
                             Add-LogEntry "SUCCESS" "  $match"
-                        }
-                    } else {
-                        Add-LogEntry "WARNUNG" "⚠ Berechtigungen weichen ab - Änderungen erforderlich"
-                        
-                        if ($analysis.Comparison.Matches.Count -gt 0) {
-                            Add-LogEntry "INFO" "Korrekte Berechtigungen:"
-                            foreach ($match in $analysis.Comparison.Matches) {
-                                Add-LogEntry "SUCCESS" "  $match"
-                            }
-                        }
-                        
-                        Add-LogEntry "WARNUNG" "Abweichende Berechtigungen:"
-                        foreach ($diff in $analysis.Comparison.Differences) {
-                            Add-LogEntry "WARNUNG" "  ❌ $diff"
                         }
                     }
                     
-                    # Zeige detaillierte ACL-Informationen
-                    Update-AclDisplay -Path $analysis.Path -Acl $analysis.CurrentAcl -Title "Aktuelle Berechtigung (Ist-Zustand)"
-                    Update-AclDisplay -Path $analysis.Path -Acl $analysis.TargetAcl -Title "Ziel-Berechtigung (Soll-Zustand)"
+                    Add-LogEntry "WARNUNG" "Abweichende Berechtigungen:"
+                    foreach ($diff in $inetpubAnalysis.Comparison.Differences) {
+                        Add-LogEntry "WARNUNG" "  ❌ $diff"
+                    }
                 }
-            } else {
-                Add-LogEntry "FEHLER" "❌ Ordner existiert, aber Zugriff verweigert"
-                Add-LogEntry "FEHLER" "Fehler: $($analysis.ErrorMessage)"
+                
+                # Zeige detaillierte ACL-Informationen
+                Update-AclDisplay -Path $inetpubAnalysis.Path -Acl $inetpubAnalysis.CurrentAcl -Title "Aktuelle Berechtigung (Ist-Zustand)"
+                Update-AclDisplay -Path $inetpubAnalysis.Path -Acl $inetpubAnalysis.TargetAcl -Title "Ziel-Berechtigung (Soll-Zustand)"
             }
         } else {
-            # Spezielle Behandlung für optionale Ordner
-            if ($analysis.Name -eq "DeviceHealthAttestation" -or $analysis.Name -eq "DeviceHealthAttestation\bin") {
-                Add-LogEntry "INFO" "📁 Ordner existiert nicht (optional - nur bei Device Health Attestation Service)"
-            } else {
-                Add-LogEntry "INFO" "📁 Ordner existiert nicht - wird bei Ausführung erstellt"
-            }
-            
-            # Zeige trotzdem die Ziel-Berechtigungen nur für Hauptordner
-            if ($analysis.Name -eq "inetpub" -and $analysis.TargetAcl) {
-                Update-AclDisplay -Path $analysis.Path -Acl $analysis.TargetAcl -Title "Ziel-Berechtigung (wird gesetzt)"
-            }
+            Add-LogEntry "FEHLER" "❌ Ordner existiert, aber Zugriff verweigert"
+            Add-LogEntry "FEHLER" "Fehler: $($inetpubAnalysis.ErrorMessage)"
         }
-        
-        Add-LogEntry "INFO" "----------------------------------------"
+    } else {
+        Add-LogEntry "INFO" "📁 inetpub-Ordner existiert nicht - wird bei Ausführung erstellt"
+        # Zeige Ziel-Berechtigungen
+        if ($inetpubAnalysis.TargetAcl) {
+            Update-AclDisplay -Path $inetpubAnalysis.Path -Acl $inetpubAnalysis.TargetAcl -Title "Ziel-Berechtigung (wird gesetzt)"
+        }
     }
     
-    # Gesamtbewertung
+    # Zeige Status der optionalen Unterordner (nur Info, keine Berechtigungsanalyse)
+    Add-LogEntry "INFO" "--- OPTIONALE UNTERORDNER ---"
+    if ($dhaExists) {
+        Add-LogEntry "INFO" "📁 DeviceHealthAttestation-Ordner vorhanden (wird mitbearbeitet)"
+    } else {
+        Add-LogEntry "INFO" "📁 DeviceHealthAttestation-Ordner nicht vorhanden (normal, nur bei DHA Service benötigt)"
+    }
+    
+    if ($dhabinExists) {
+        Add-LogEntry "INFO" "📁 DeviceHealthAttestation/bin-Ordner vorhanden (wird mitbearbeitet)"
+    } else {
+        Add-LogEntry "INFO" "📁 DeviceHealthAttestation/bin-Ordner nicht vorhanden (normal, nur bei DHA Service benötigt)"
+    }
+    
+    Add-LogEntry "INFO" "----------------------------------------"
+    
+    # Gesamtbewertung - KORRIGIERT: Bezieht sich nur auf inetpub
     Add-LogEntry "INFO" "=== GESAMTBEWERTUNG ==="
     
-    $existingFolders = $analyses | Where-Object { $_.Exists -and $_.IsAccessible }
-    $correctPermissions = $existingFolders | Where-Object { $_.Comparison.IsIdentical }
-    $incorrectPermissions = $existingFolders | Where-Object { -not $_.Comparison.IsIdentical }
-    $reparsePoints = $analyses | Where-Object { $_.HasReparsePoint }
-    
-    # Anzahl der optionalen Ordner die nicht existieren
-    $missingOptionalFolders = ($analyses | Where-Object { -not $_.Exists -and ($_.Name -like "*DeviceHealthAttestation*") }).Count
-    $missingRequiredFolders = ($analyses | Where-Object { -not $_.Exists -and ($_.Name -eq "inetpub") }).Count
-    
-    if ($reparsePoints.Count -gt 0) {
-        Add-LogEntry "FEHLER" "❌ KRITISCH: Reparse Points erkannt - Skript kann nicht ausgeführt werden"
+    if ($inetpubAnalysis.HasReparsePoint) {
+        Add-LogEntry "FEHLER" "❌ KRITISCH: Reparse Point erkannt - Skript kann nicht ausgeführt werden"
         return $false
     }
     
-    if ($correctPermissions.Count -eq $existingFolders.Count -and $existingFolders.Count -gt 0) {
-        Add-LogEntry "SUCCESS" "✅ PERFEKT: Alle vorhandenen Ordner haben bereits die korrekten Berechtigungen"
-        if ($missingOptionalFolders -gt 0) {
-            Add-LogEntry "INFO" "ℹ️ $missingOptionalFolders optionale DeviceHealthAttestation-Ordner fehlen (normal)"
+    if ($inetpubAnalysis.Exists) {
+        if ($inetpubAnalysis.IsAccessible) {
+            if ($inetpubAnalysis.Comparison -and $inetpubAnalysis.Comparison.IsIdentical) {
+                Add-LogEntry "SUCCESS" "✅ PERFEKT: inetpub-Ordner hat bereits die korrekten Berechtigungen"
+                Add-LogEntry "INFO" "ℹ️ Skript-Ausführung ist optional (keine Änderungen erforderlich)"
+            } else {
+                Add-LogEntry "WARNUNG" "⚠ AKTION ERFORDERLICH: inetpub-Ordner hat abweichende Berechtigungen"
+                Add-LogEntry "INFO" "ℹ️ Skript-Ausführung wird Berechtigungen korrigieren"
+            }
+        } else {
+            Add-LogEntry "FEHLER" "❌ PROBLEM: Zugriff auf inetpub-Ordner verweigert"
         }
-        Add-LogEntry "INFO" "ℹ️ Skript-Ausführung ist optional"
-    } elseif ($incorrectPermissions.Count -gt 0) {
-        Add-LogEntry "WARNUNG" "⚠ AKTION ERFORDERLICH: $($incorrectPermissions.Count) Ordner haben abweichende Berechtigungen"
-        Add-LogEntry "INFO" "ℹ️ Skript-Ausführung wird Berechtigungen korrigieren"
     } else {
-        if ($missingRequiredFolders -gt 0) {
-            Add-LogEntry "INFO" "ℹ️ inetpub-Ordner existiert nicht - Skript wird ihn mit korrekten Berechtigungen erstellen"
-        }
-        if ($missingOptionalFolders -gt 0) {
-            Add-LogEntry "INFO" "ℹ️ $missingOptionalFolders DeviceHealthAttestation-Ordner fehlen (werden nur bei installiertem DHA Service benötigt)"
-        }
+        Add-LogEntry "INFO" "ℹ️ inetpub-Ordner existiert nicht - Skript wird ihn mit korrekten Berechtigungen erstellen"
     }
     
     Add-LogEntry "INFO" "=== ANALYSE ABGESCHLOSSEN ==="
