@@ -1,12 +1,12 @@
-﻿<#
+<#
 .SYNOPSIS
   Manage the Networkcards from DC
 .DESCRIPTION
   Netzwerkkarten-Verwaltung mit besonderer Unterstützung für Domain Controller
 .NOTES
-  Version:        1.2
+  Version:        1.3
   Author:         Jörn Walter
-  Creation Date:  2025-04-19
+  Creation Date:  2025-06-11
 #>
 
 # Funktion zum Überprüfen, ob das Skript mit Administratorrechten ausgeführt wird
@@ -71,7 +71,7 @@ function Write-DebugLog {
 #region UI-Erstellung
 # Erstellen des Hauptfensters
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Manage the Networkcards from DC"
+$form.Text = "Aktive Netzwerkkarten"
 $form.Size = New-Object System.Drawing.Size(1100, 600)
 $form.StartPosition = "CenterScreen"
 $form.Font = New-Object System.Drawing.Font("Segoe UI", 10)
@@ -687,10 +687,14 @@ finally {
         # Skript in die Datei schreiben
         $scriptContent | Out-File -FilePath $scriptPath -Encoding utf8 -Force
         
-        # Erstellen der geplanten Aufgabe
+        # Erstellen der geplanten Aufgabe mit 1 Minute Verzögerung
         $taskName = "RestartAdapter_$safeAdapterName"
         $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+        
+        # Trigger mit 1 Minute Verzögerung nach dem Systemstart
         $trigger = New-ScheduledTaskTrigger -AtStartup
+        $trigger.Delay = "PT1M"
+        
         $settings = New-ScheduledTaskSettingsSet -Hidden -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 10)
         $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
         
@@ -700,7 +704,7 @@ finally {
         # Neue Aufgabe registrieren
         Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal
         
-        $statusLabel.Text = "Autostart-Task für Netzwerkadapter '$AdapterName' wurde erfolgreich erstellt."
+        $statusLabel.Text = "Autostart-Task für Netzwerkadapter '$AdapterName' wurde erfolgreich erstellt (mit 1 Minute Verzögerung)."
         return $true
     }
     catch {
@@ -1062,7 +1066,7 @@ $restartButton.Add_Click({
         
         # Bestätigungsdialog anzeigen
         $confirmResult = [System.Windows.Forms.MessageBox]::Show(
-            "Möchten Sie den Netzwerkadapter '$($adapter.Name)' wirklich neu starten?",
+            "Möchtest du den Netzwerkadapter '$($adapter.Name)' wirklich neu starten?",
             "Netzwerkadapter neu starten",
             [System.Windows.Forms.MessageBoxButtons]::YesNo,
             [System.Windows.Forms.MessageBoxIcon]::Question)
@@ -1076,7 +1080,7 @@ $restartButton.Add_Click({
             else {
                 # Ein Fehler ist aufgetreten - eventuell Adminrechte erforderlich
                 $elevateResult = [System.Windows.Forms.MessageBox]::Show(
-                    "Der Neustart des Netzwerkadapters erfordert Administratorrechte. Möchten Sie das Skript mit erhöhten Rechten neu starten?",
+                    "Der Neustart des Netzwerkadapters erfordert Administratorrechte. Möchtest du das Skript mit erhöhten Rechten neu starten?",
                     "Administratorrechte erforderlich",
                     [System.Windows.Forms.MessageBoxButtons]::YesNo,
                     [System.Windows.Forms.MessageBoxIcon]::Warning)
@@ -1107,7 +1111,7 @@ $autostartButton.Add_Click({
         
         # Bestätigungsdialog anzeigen
         $confirmResult = [System.Windows.Forms.MessageBox]::Show(
-            "Möchten Sie eine geplante Aufgabe erstellen, um den Netzwerkadapter '$($adapter.Name)' beim Systemstart automatisch neu zu starten?",
+            "Möchtest du eine geplante Aufgabe erstellen, um den Netzwerkadapter '$($adapter.Name)' beim Systemstart automatisch neu zu starten?",
             "Autostart-Task erstellen",
             [System.Windows.Forms.MessageBoxButtons]::YesNo,
             [System.Windows.Forms.MessageBoxIcon]::Question)
@@ -1118,7 +1122,7 @@ $autostartButton.Add_Click({
             if (-not $success) {
                 # Ein Fehler ist aufgetreten - eventuell Adminrechte erforderlich
                 $elevateResult = [System.Windows.Forms.MessageBox]::Show(
-                    "Das Erstellen der geplanten Aufgabe erfordert Administratorrechte. Möchten Sie das Skript mit erhöhten Rechten neu starten?",
+                    "Das Erstellen der geplanten Aufgabe erfordert Administratorrechte. Möchtest du das Skript mit erhöhten Rechten neu starten?",
                     "Administratorrechte erforderlich",
                     [System.Windows.Forms.MessageBoxButtons]::YesNo,
                     [System.Windows.Forms.MessageBoxIcon]::Warning)
@@ -1167,9 +1171,9 @@ try {
         $outputBox.SelectionColor = [System.Drawing.Color]::Red
         $outputBox.AppendText("Domain Controller Modus`r`n")
         $outputBox.AppendText("=====================`r`n`r`n")
-        $outputBox.AppendText("Keine Netzwerkadapter gefunden. Bitte klicken Sie auf 'Diagnose' für mehr Informationen.`r`n")
+        $outputBox.AppendText("Keine Netzwerkadapter gefunden. Bitte klicke auf 'Diagnose' für mehr Informationen.`r`n")
         $outputBox.AppendText("Die Text-Ansicht sollte dennoch funktionieren.`r`n`r`n")
-        $outputBox.AppendText("Hinweis: Versuchen Sie das Skript mit administrativen Rechten auszuführen.`r`n")
+        $outputBox.AppendText("Hinweis: Versuche das Skript mit administrativen Rechten auszuführen.`r`n")
         
         # Textmodus als Standard aktivieren, wenn auf einem DC gestartet
         $global:isGridView = $false
