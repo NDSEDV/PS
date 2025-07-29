@@ -1,12 +1,12 @@
-﻿<#
+<#
 .SYNOPSIS
   File Search Tool 
 .DESCRIPTION
   Das Tool hilft bei der täglichen Arbeit
 .NOTES
-  Version:        1.1
+  Version:        1.2
   Author:         Jörn Walter
-  Creation Date:  2025-07-28
+  Creation Date:  2025-07-29
 
   Copyright (c) Jörn Walter. All rights reserved.
   Web: https://www.der-windows-papst.de
@@ -273,6 +273,9 @@ $showDetailsItem.Add_Click({
 
 🔒 SICHERHEITSBEWERTUNG (libcurl.dll):
 $riskLevel
+
+📥 AKTUELLE VERSION HERUNTERLADEN:
+https://curl.se/download.html
 "@
                 }
                 
@@ -356,10 +359,13 @@ Diese Versionen enthalten:
 • Anfällig für Man-in-the-Middle Angriffe
 
 EMPFOHLENE MASSNAHMEN:
-✅ Aktualisierung auf libcurl 7.68.0+ (2020)
-✅ Entfernung veralteter Versionen
+✅ Aktualisierung auf libcurl 8.15.0 (Juli 2025) 
+✅ Entfernung veralteter Versionen (besonders < 8.0)
 ✅ Überprüfung der Anwendungen die libcurl verwenden
 ✅ Regelmäßige Sicherheitsupdates
+
+📥 AKTUELLE VERSION HERUNTERLADEN:
+https://curl.se/download.html
 
 🔗 Weitere Informationen:
 https://curl.se/libcurl/security.html
@@ -393,10 +399,16 @@ function Analyze-LibcurlSecurity {
                 $riskReason = "Datei von vor 2018 - enthält bekannte Sicherheitslücken"
             }
             # Alte Versionspattern erkennen
-            elseif ($file.Version -match "^[0-6]\." -or $file.Version -match "^7\.[0-5][0-9]\.") {
+            elseif ($file.Version -match "^[0-6]\." -or $file.Version -match "^7\.") {
+                $isRisky = $true
+                $riskLevel = "HOCH"
+                $riskReason = "Stark veraltete libcurl Version (< 8.0) - dringend Update erforderlich"
+            }
+            # Version 8.0-8.14 als mittel riskant einstufen
+            elseif ($file.Version -match "^8\.[0-9]\." -or $file.Version -match "^8\.1[0-4]\.") {
                 $isRisky = $true
                 $riskLevel = "MITTEL"
-                $riskReason = "Veraltete libcurl Version - Update empfohlen"
+                $riskReason = "Veraltete libcurl 8.x Version - Update auf 8.15.0 empfohlen"
             }
             
             if ($isRisky) {
@@ -548,7 +560,9 @@ function Search-Files {
                     $warningText += "  Grund: $($risky.Reason)`n`n"
                 }
                 
-                $warningText += "EMPFEHLUNG: Aktualisiere die betroffenen Anwendungen!"
+                $warningText += "EMPFEHLUNG: Aktualisiere die betroffenen Anwendungen!`n"
+                $warningText += "📥 AKTUELLE VERSION HERUNTERLADEN:`n"
+                $warningText += "https://curl.se/download.html"
                 
                 [System.Windows.Forms.MessageBox]::Show($warningText, "SICHERHEITSWARNUNG - libcurl.dll", "OK", "Warning")
             }
@@ -827,6 +841,25 @@ function Create-HTMLReport {
             margin: 5px 0;
             color: #2e7d32;
         }
+        .download-link {
+            background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+            border: 2px solid #4caf50;
+            border-left: 6px solid #2e7d32;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .download-link a {
+            color: #2e7d32;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        .download-link a:hover {
+            color: #1b5e20;
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
@@ -875,6 +908,10 @@ function Create-HTMLReport {
                         <li>Überprüfung der Anwendungen die libcurl verwenden</li>
                         <li>Regelmäßige Sicherheitsupdates implementieren</li>
                     </ul>
+                    <div class="download-link">
+                        <p><strong>📥 AKTUELLE VERSION HERUNTERLADEN:</strong><br>
+                        <a href="https://curl.se/download.html" target="_blank">https://curl.se/download.html</a></p>
+                    </div>
                     <p><strong>Weitere Informationen:</strong> <a href="https://curl.se/libcurl/security.html" target="_blank">curl.se/libcurl/security.html</a></p>
                 </div>
             </div>
