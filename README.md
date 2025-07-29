@@ -40,3 +40,6 @@ https://www.der-windows-papst.de/2025/05/02/check-and-clean-admincount/
 
 IIS Inetpub Folder ACL Manager
 https://www.der-windows-papst.de/2025/06/07/iis-inetpub-folder-acl-manager/
+
+libcurl-Bibliotheken können Sicherheitslücken aufweisen
+https://www.der-windows-papst.de/2025/07/29/libcurl-bibliotheken-koennen-sicherheitsluecken-aufweisen/
