@@ -4,9 +4,9 @@
 .DESCRIPTION
   Das Tool hilft bei der täglichen Arbeit
 .NOTES
-  Version:        1.2
+  Version:        1.3
   Author:         Jörn Walter
-  Creation Date:  2025-07-29
+  Creation Date:  2025-07-31
 
   Copyright (c) Jörn Walter. All rights reserved.
   Web: https://www.der-windows-papst.de
@@ -586,407 +586,870 @@ function Search-Files {
     }
 }
 
-# Funktion: HTML-Bericht erstellen
+# Funktion für den HTML Bericht
 function Create-HTMLReport {
     if ($global:searchResults.Count -eq 0) {
         [System.Windows.Forms.MessageBox]::Show("Keine Suchergebnisse für Bericht verfügbar.", "Information", "OK", "Information")
         return
     }
     
-    # Speicherdialog
-    $saveDialog = New-Object System.Windows.Forms.SaveFileDialog
-    $saveDialog.Filter = "HTML-Dateien (*.html)|*.html"
-    $saveDialog.Title = "HTML-Bericht speichern"
-    $saveDialog.FileName = "FileSearchReport_$(Get-Date -Format 'yyyyMMdd_HHmmss').html"
+    # Splitting-Parameter
+    $maxRowsPerFile = 500  # Anzahl Zeilen pro HTML-Datei
+    $totalFiles = $global:searchResults.Count
+    $needsSplitting = $totalFiles -gt $maxRowsPerFile
     
-    if ($saveDialog.ShowDialog() -eq "OK") {
-        try {
-            $htmlContent = @"
+    if ($needsSplitting) {
+        $numberOfParts = [Math]::Ceiling($totalFiles / $maxRowsPerFile)
+        
+        $dialogResult = [System.Windows.Forms.MessageBox]::Show(
+            "📊 BERICHT-OPTIONEN`n`nGefundene Dateien: $totalFiles`n`n🔄 SPLITTING EMPFOHLEN:`n• $numberOfParts Teildateien mit je max. $maxRowsPerFile Zeilen`n• Index-Datei mit Navigation zwischen Teilen`n• Bessere Performance im Browser`n`n📄 EINZELER BERICHT:`n• Eine große HTML-Datei mit $totalFiles Zeilen`n• Kann bei vielen Zeilen langsam laden`n`nMöchtest du den Bericht in $numberOfParts Teile aufteilen?", 
+            "Bericht aufteilen? ($totalFiles Dateien)", 
+            "YesNoCancel", 
+            "Question"
+        )
+        
+        if ($dialogResult -eq "Cancel") {
+            return
+        }
+        
+        $shouldSplit = ($dialogResult -eq "Yes")
+    } else {
+        $shouldSplit = $false
+    }
+    
+    # Speicherdialog
+    if ($shouldSplit) {
+        # Ordner für geteilten Bericht
+        $folderDialog = New-Object System.Windows.Forms.FolderBrowserDialog
+        $folderDialog.Description = "Wähle einen Ordner für die geteilten Berichte"
+        $folderDialog.ShowNewFolderButton = $true
+        
+        if ($folderDialog.ShowDialog() -eq "OK") {
+            try {
+                $reportFolder = $folderDialog.SelectedPath
+                $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+                $reportName = "FileSearchReport_$timestamp"
+                
+                Create-SplitReportByRows -ReportFolder $reportFolder -ReportName $reportName -MaxRowsPerFile $maxRowsPerFile
+            }
+            catch {
+                [System.Windows.Forms.MessageBox]::Show("Fehler beim Erstellen des geteilten Berichts: $($_.Exception.Message)", "Fehler", "OK", "Error")
+            }
+        }
+    } else {
+        # Einzelne Datei
+        $saveDialog = New-Object System.Windows.Forms.SaveFileDialog
+        $saveDialog.Filter = "HTML-Dateien (*.html)|*.html"
+        $saveDialog.Title = "HTML-Bericht speichern"
+        $saveDialog.FileName = "FileSearchReport_$(Get-Date -Format 'yyyyMMdd_HHmmss').html"
+        
+        if ($saveDialog.ShowDialog() -eq "OK") {
+            try {
+                Create-SingleReport -FilePath $saveDialog.FileName
+            }
+            catch {
+                [System.Windows.Forms.MessageBox]::Show("Fehler beim Erstellen des Berichts: $($_.Exception.Message)", "Fehler", "OK", "Error")
+            }
+        }
+    }
+}
+
+# Funktion: Geteilter Bericht nach Zeilen
+function Create-SplitReportByRows {
+    param(
+        [string]$ReportFolder,
+        [string]$ReportName,
+        [int]$MaxRowsPerFile
+    )
+    
+    Write-Host "Erstelle geteilten Bericht mit max. $MaxRowsPerFile Zeilen pro Datei..."
+    
+    # Sortiere Ergebnisse alphabetisch
+    $sortedResults = $global:searchResults | Sort-Object Name
+    $totalFiles = $sortedResults.Count
+    $numberOfParts = [Math]::Ceiling($totalFiles / $MaxRowsPerFile)
+    
+    # Erstelle Hauptverzeichnis
+    $mainReportPath = Join-Path $ReportFolder $ReportName
+    if (-not (Test-Path $mainReportPath)) {
+        New-Item -ItemType Directory -Path $mainReportPath -Force | Out-Null
+    }
+    
+    # Sicherheitsanalyse
+    $analysis = $null
+    if ($filenameTextBox.Text -like "*libcurl*") {
+        $analysis = Analyze-LibcurlSecurity
+    }
+    
+    # 1. ERSTELLE INDEX-DATEI
+    $indexPath = Join-Path $mainReportPath "index.html"
+    Create-IndexFileByRows -FilePath $indexPath -TotalFiles $totalFiles -NumberOfParts $numberOfParts -MaxRowsPerFile $MaxRowsPerFile -Analysis $analysis -ReportName $ReportName
+    
+    # 2. ERSTELLE TEIL-DATEIEN mit aussagekräftigen Namen
+    $createdFiles = @()
+    for ($i = 0; $i -lt $numberOfParts; $i++) {
+        $startIndex = $i * $MaxRowsPerFile
+        $endIndex = [Math]::Min(($startIndex + $MaxRowsPerFile - 1), ($totalFiles - 1))
+        $partNumber = $i + 1
+        
+        $partFiles = $sortedResults[$startIndex..$endIndex]
+        
+        # Erstelle aussagekräftigen Dateinamen basierend auf ersten und letzten Dateinamen
+        $firstFile = $partFiles[0].Name
+        $lastFile = $partFiles[-1].Name
+        
+        # Kürze Namen falls zu lang
+        $firstShort = if ($firstFile.Length -gt 20) { $firstFile.Substring(0, 17) + "..." } else { $firstFile }
+        $lastShort = if ($lastFile.Length -gt 20) { $lastFile.Substring(0, 17) + "..." } else { $lastFile }
+        
+        # Erstelle Dateinamen: "Teil1_explorer-to-notepad.html"
+        $partFileName = "Teil$partNumber" + "_" + ($firstShort -replace '[<>:"/\\|?*]', '_') + "-bis-" + ($lastShort -replace '[<>:"/\\|?*]', '_') + ".html"
+        
+        # Falls der Name zu lang wird, verwende einfache Nummerierung
+        if ($partFileName.Length -gt 80) {
+            $partFileName = "Teil$partNumber" + "_Zeilen$($startIndex + 1)-$($endIndex + 1).html"
+        }
+        
+        $partFilePath = Join-Path $mainReportPath $partFileName
+        
+        Create-PartFile -FilePath $partFilePath -PartNumber $partNumber -Files $partFiles -StartIndex ($startIndex + 1) -EndIndex ($endIndex + 1) -TotalFiles $totalFiles -ReportName $ReportName -FirstFile $firstShort -LastFile $lastShort -PartFileName $partFileName
+        $createdFiles += $partFileName
+        
+        Write-Host "Teil $partNumber erstellt: $($partFiles.Count) Dateien ($firstShort bis $lastShort)"
+    }
+    
+    # 3. ERSTELLE SICHERHEITS-DATEI (falls notwendig)
+    if ($analysis -and $analysis.RiskyFiles.Count -gt 0) {
+        $securityPath = Join-Path $mainReportPath "security.html"
+        Create-SecurityFile -FilePath $securityPath -Analysis $analysis -ReportName $ReportName
+        $createdFiles += "security.html"
+    }
+    
+    $successMessage = @"
+✅ GETEILTER BERICHT ERFOLGREICH ERSTELLT!
+
+📁 Hauptordner: $mainReportPath
+
+📊 Aufteilung:
+• $numberOfParts Teildateien mit je max. $MaxRowsPerFile Zeilen
+• Gesamt: $totalFiles Dateien
+
+📄 Erstellte Dateien:
+• index.html (Hauptnavigation)
+$(foreach ($file in $createdFiles) { "• $file`n" })
+
+🌐 Öffne die 'index.html' um zu beginnen.
+"@
+    
+    [System.Windows.Forms.MessageBox]::Show($successMessage, "Geteilter Bericht erstellt", "OK", "Information")
+    
+    # Fragen ob Index geöffnet werden soll
+    $result = [System.Windows.Forms.MessageBox]::Show("Möchtest du den Index-Bericht jetzt öffnen?", "Bericht öffnen", "YesNo", "Question")
+    if ($result -eq "Yes") {
+        Start-Process $indexPath
+    }
+}
+
+# Funktion: Index-Datei für zeilenbasiertes Splitting
+function Create-IndexFileByRows {
+    param(
+        [string]$FilePath,
+        [int]$TotalFiles,
+        [int]$NumberOfParts,
+        [int]$MaxRowsPerFile,
+        [object]$Analysis,
+        [string]$ReportName
+    )
+    
+    $totalSize = [math]::Round(($global:searchResults | Measure-Object -Property Size -Sum).Sum / 1024, 2)
+    $withVersion = ($global:searchResults | Where-Object {$_.Version -ne "N/A"}).Count
+    
+    $htmlContent = @"
 <!DOCTYPE html>
 <html lang="de">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Search Report - libcurl.dll</title>
+    <title>$ReportName - Index</title>
     <style>
+        * { box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
+            margin: 0; padding: 20px;
             background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
             min-height: 100vh;
         }
         .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 15px 35px rgba(13, 71, 161, 0.2);
-            overflow: hidden;
-            border: 1px solid #90caf9;
+            max-width: 1200px; margin: 0 auto; background: white;
+            border-radius: 15px; box-shadow: 0 15px 35px rgba(13, 71, 161, 0.2);
+            overflow: hidden; border: 1px solid #90caf9;
         }
         .header {
             background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
-            color: white;
-            padding: 40px;
-            text-align: center;
-            position: relative;
+            color: white; padding: 40px; text-align: center;
         }
-        .header::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%);
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 2.8em;
-            font-weight: 300;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        }
-        .header p {
-            margin: 15px 0 0 0;
-            opacity: 0.95;
-            font-size: 1.2em;
-        }
-        .content {
-            padding: 40px;
-            background: linear-gradient(to bottom, #f8fbff 0%, #ffffff 100%);
-        }
+        .header h1 { margin: 0; font-size: 2.8em; font-weight: 300; }
+        .header p { margin: 15px 0 0 0; opacity: 0.95; font-size: 1.2em; }
+        .content { padding: 40px; }
+        
         .info-section {
             background: linear-gradient(135deg, #e3f2fd 0%, #f8fbff 100%);
-            border: 2px solid #90caf9;
-            border-left: 6px solid #1976d2;
-            padding: 25px;
-            margin-bottom: 35px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(25, 118, 210, 0.1);
+            border: 2px solid #90caf9; border-left: 6px solid #1976d2;
+            padding: 25px; margin-bottom: 35px; border-radius: 10px;
         }
-        .info-section h3 {
-            margin: 0 0 15px 0;
-            color: #0d47a1;
-            font-size: 1.4em;
-            font-weight: 600;
-        }
-        .info-section p {
-            margin: 8px 0;
-            color: #1565c0;
-            font-size: 1.1em;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 25px;
-            background: white;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 8px 25px rgba(13, 71, 161, 0.15);
-            border: 2px solid #e3f2fd;
-        }
-        th {
-            background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%);
-            color: white;
-            padding: 18px 15px;
-            text-align: left;
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.95em;
-            letter-spacing: 1.2px;
-            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
-        }
-        td {
-            padding: 15px;
-            border-bottom: 1px solid #e3f2fd;
-            vertical-align: top;
-            transition: background 0.3s ease;
-        }
-        tr:nth-child(even) {
-            background: linear-gradient(to right, #f8fbff 0%, #ffffff 100%);
-        }
-        tr:hover {
-            background: linear-gradient(to right, #e3f2fd 0%, #f0f8ff 100%);
-            transform: scale(1.001);
-            box-shadow: 0 2px 8px rgba(25, 118, 210, 0.1);
-        }
-        .path-cell {
-            font-family: 'Courier New', monospace;
-            font-size: 0.9em;
-            word-break: break-all;
-            color: #1565c0;
-            background: rgba(227, 242, 253, 0.3);
-            padding: 8px;
-            border-radius: 4px;
-        }
-        .version-cell {
-            font-weight: bold;
-            color: #0d47a1;
-            background: rgba(187, 222, 251, 0.2);
-            padding: 6px 10px;
-            border-radius: 15px;
-            text-align: center;
-        }
-        .size-cell {
-            text-align: right;
-            font-weight: 600;
-            color: #1976d2;
-        }
-        .footer {
-            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
-            padding: 25px 40px;
-            text-align: center;
-            border-top: 3px solid #1976d2;
-            color: #0d47a1;
-        }
-        .footer a {
-            color: #1565c0;
-            text-decoration: none;
-            font-weight: 600;
-        }
-        .footer a:hover {
-            color: #0d47a1;
-            text-decoration: underline;
-        }
+        .info-section h3 { margin: 0 0 15px 0; color: #0d47a1; font-size: 1.4em; }
+        .info-section p { margin: 8px 0; color: #1565c0; font-size: 1.1em; }
+        
         .summary {
-            display: flex;
-            justify-content: space-around;
-            margin-bottom: 30px;
-            gap: 20px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px; margin-bottom: 30px;
         }
         .summary-item {
-            text-align: center;
-            background: linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
-            padding: 25px 20px;
-            border-radius: 12px;
-            box-shadow: 0 6px 20px rgba(13, 71, 161, 0.12);
-            border: 2px solid #e3f2fd;
-            border-top: 4px solid #1976d2;
-            flex: 1;
-            transition: transform 0.3s ease;
+            text-align: center; background: white; padding: 25px;
+            border-radius: 12px; box-shadow: 0 6px 20px rgba(13, 71, 161, 0.12);
+            border: 2px solid #e3f2fd; border-top: 4px solid #1976d2;
         }
-        .summary-item:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(13, 71, 161, 0.18);
+        .summary-item h4 { margin: 0; color: #0d47a1; font-size: 2.2em; font-weight: 700; }
+        .summary-item p { margin: 10px 0 0 0; color: #1565c0; font-weight: 500; }
+        
+        .parts-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px; margin-top: 30px;
         }
-        .summary-item h4 {
-            margin: 0;
-            color: #0d47a1;
-            font-size: 2.2em;
-            font-weight: 700;
-            text-shadow: 0 1px 3px rgba(13, 71, 161, 0.2);
+        .part-card {
+            background: white; border: 2px solid #e3f2fd; border-radius: 12px;
+            padding: 20px; transition: all 0.3s ease; box-shadow: 0 4px 12px rgba(13, 71, 161, 0.1);
         }
-        .summary-item p {
-            margin: 10px 0 0 0;
-            color: #1565c0;
-            font-weight: 500;
-            font-size: 1em;
+        .part-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(13, 71, 161, 0.2); }
+        .part-card h4 {
+            margin: 0 0 15px 0; color: #0d47a1; font-size: 1.5em;
+            padding: 10px 15px; background: #e3f2fd; border-radius: 8px; text-align: center;
         }
+        .part-card p { margin: 8px 0; color: #666; }
+        .part-card a {
+            display: inline-block; margin-top: 15px; padding: 10px 20px;
+            background: #1976d2; color: white; text-decoration: none;
+            border-radius: 25px; font-weight: 600; transition: all 0.3s ease;
+        }
+        .part-card a:hover { background: #0d47a1; transform: scale(1.05); }
+        
         .security-warning {
             background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
-            border: 2px solid #ff9800;
-            border-left: 6px solid #f57c00;
-            padding: 25px;
-            margin-bottom: 35px;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(245, 124, 0, 0.2);
+            border: 2px solid #ff9800; border-left: 6px solid #f57c00;
+            padding: 25px; margin-bottom: 35px; border-radius: 10px;
         }
-        .security-warning h3 {
-            margin: 0 0 15px 0;
-            color: #e65100;
-            font-size: 1.4em;
-            font-weight: 600;
+        .security-warning h3 { margin: 0 0 15px 0; color: #e65100; font-size: 1.4em; }
+        .security-warning a {
+            display: inline-block; margin-top: 15px; padding: 12px 25px;
+            background: #f57c00; color: white; text-decoration: none;
+            border-radius: 25px; font-weight: 600;
         }
-        .security-warning h4 {
-            color: #f57c00;
-            margin: 15px 0 10px 0;
+        .security-warning a:hover { background: #e65100; }
+        
+        .footer {
+            background: #e3f2fd; padding: 25px; text-align: center;
+            border-top: 3px solid #1976d2; color: #0d47a1;
         }
-        .warning-details {
-            margin: 15px 0;
+        .footer a { color: #1565c0; text-decoration: none; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 File Search Report - Index</h1>
+            <p>Geteilter Bericht | Erstellt am $(Get-Date -Format 'dd.MM.yyyy um HH:mm:ss')</p>
+        </div>
+        
+        <div class="content">
+            <div class="info-section">
+                <h3>📋 Suchparameter</h3>
+                <p><strong>Dateiname:</strong> $($filenameTextBox.Text)</p>
+                <p><strong>Suchpfad:</strong> $($pathTextBox.Text)</p>
+                <p><strong>Berichtstyp:</strong> Geteilter Bericht (max. $MaxRowsPerFile Zeilen pro Teil)</p>
+                <p><strong>Aufteilung:</strong> $NumberOfParts Teildateien</p>
+            </div>
+            
+            <div class="summary">
+                <div class="summary-item">
+                    <h4>$TotalFiles</h4>
+                    <p>Gefundene Dateien</p>
+                </div>
+                <div class="summary-item">
+                    <h4>$totalSize</h4>
+                    <p>Gesamt MB</p>
+                </div>
+                <div class="summary-item">
+                    <h4>$withVersion</h4>
+                    <p>Mit Versionsinformation</p>
+                </div>
+                <div class="summary-item">
+                    <h4>$NumberOfParts</h4>
+                    <p>Teildateien</p>
+                </div>
+            </div>
+"@
+
+    # Sicherheitswarnung falls notwendig
+    if ($Analysis -and $Analysis.RiskyFiles.Count -gt 0) {
+        $htmlContent += @"
+            <div class="security-warning">
+                <h3>⚠️ SICHERHEITSWARNUNG</h3>
+                <p><strong>$($Analysis.RiskyFiles.Count) potentiell gefährliche Dateien gefunden!</strong></p>
+                <p>Überprüfe dringend die Sicherheitsbewertung für Details und Empfehlungen.</p>
+                <a href="security.html">🔒 Sicherheitsbericht anzeigen</a>
+            </div>
+"@
+    }
+
+    $htmlContent += @"
+            <h3>📄 Berichtsteile</h3>
+            <div class="parts-grid">
+"@
+
+    for ($i = 1; $i -le $NumberOfParts; $i++) {
+        $startRow = (($i - 1) * $MaxRowsPerFile) + 1
+        $endRow = [Math]::Min(($i * $MaxRowsPerFile), $TotalFiles)
+        $rowsInPart = $endRow - $startRow + 1
+        
+        # Bestimme ersten und letzten Dateinamen für diesen Teil
+        $partStartIndex = ($i - 1) * $MaxRowsPerFile
+        $partEndIndex = [Math]::Min(($partStartIndex + $MaxRowsPerFile - 1), ($TotalFiles - 1))
+        $sortedResults = $global:searchResults | Sort-Object Name
+        $firstFileName = $sortedResults[$partStartIndex].Name
+        $lastFileName = $sortedResults[$partEndIndex].Name
+        
+        # Kürze Namen für Anzeige
+        $firstShort = if ($firstFileName.Length -gt 25) { $firstFileName.Substring(0, 22) + "..." } else { $firstFileName }
+        $lastShort = if ($lastFileName.Length -gt 25) { $lastFileName.Substring(0, 22) + "..." } else { $lastFileName }
+        
+        # Erstelle den tatsächlichen Dateinamen (wie in der Create-SplitReportByRows Funktion)
+        $firstFileShort = if ($firstFileName.Length -gt 20) { $firstFileName.Substring(0, 17) + "..." } else { $firstFileName }
+        $lastFileShort = if ($lastFileName.Length -gt 20) { $lastFileName.Substring(0, 17) + "..." } else { $lastFileName }
+        $partFileName = "Teil$i" + "_" + ($firstFileShort -replace '[<>:"/\\|?*]', '_') + "-bis-" + ($lastFileShort -replace '[<>:"/\\|?*]', '_') + ".html"
+        
+        if ($partFileName.Length -gt 80) {
+            $partFileName = "Teil$i" + "_Zeilen$startRow-$endRow.html"
         }
-        .risk-item {
-            padding: 12px;
-            margin: 8px 0;
-            border-radius: 6px;
-            border-left: 4px solid;
+        
+        $htmlContent += @"
+                <div class="part-card">
+                    <h4>📄 Teil $i</h4>
+                    <p><strong>$firstShort</strong> bis <strong>$lastShort</strong></p>
+                    <p><strong>Zeilen $startRow - $endRow</strong> ($rowsInPart Dateien)</p>
+                    <p>Alle Dateien von "$firstShort" bis "$lastShort" alphabetisch sortiert</p>
+                    <a href="$partFileName">Teil $i öffnen</a>
+                </div>
+"@
+    }
+
+    $htmlContent += @"
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>© 2025 Jörn Walter - <a href="https://www.der-windows-papst.de">https://www.der-windows-papst.de</a></p>
+            <p>File Search Tool v1.2 - Split Report (Zeilen-basiert)</p>
+        </div>
+    </div>
+</body>
+</html>
+"@
+
+    $htmlContent | Out-File -FilePath $FilePath -Encoding UTF8
+}
+
+# Funktion: Teil-Datei erstellen
+function Create-PartFile {
+    param(
+        [string]$FilePath,
+        [int]$PartNumber,
+        [array]$Files,
+        [int]$StartIndex,
+        [int]$EndIndex,
+        [int]$TotalFiles,
+        [string]$ReportName,
+        [string]$FirstFile,
+        [string]$LastFile,
+        [string]$PartFileName
+    )
+    
+    $htmlContent = @"
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>$ReportName - Teil $PartNumber</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0; padding: 20px;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            min-height: 100vh;
         }
-        .risk-kritisch {
-            background: #ffebee;
-            border-left-color: #f44336;
-            color: #c62828;
+        .container {
+            max-width: 1400px; margin: 0 auto; background: white;
+            border-radius: 15px; box-shadow: 0 15px 35px rgba(13, 71, 161, 0.2);
+            overflow: hidden; border: 1px solid #90caf9;
         }
-        .risk-hoch {
-            background: #fff3e0;
-            border-left-color: #ff9800;
-            color: #e65100;
+        .header {
+            background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+            color: white; padding: 30px; text-align: center;
         }
-        .risk-mittel {
-            background: #fff8e1;
-            border-left-color: #ffc107;
-            color: #f57c00;
+        .header h1 { margin: 0; font-size: 2.5em; font-weight: 300; }
+        .header p { margin: 15px 0 0 0; opacity: 0.95; font-size: 1.1em; }
+        .header .range-info { 
+            background: rgba(255,255,255,0.1); padding: 10px 20px; 
+            border-radius: 20px; margin-top: 15px; display: inline-block;
+            font-family: 'Courier New', monospace; font-size: 0.9em;
         }
-        .security-advice {
-            background: rgba(76, 175, 80, 0.1);
-            padding: 15px;
-            border-radius: 8px;
-            border-left: 4px solid #4caf50;
-            margin-top: 15px;
+        
+        .nav-bar {
+            background: #f8fbff; padding: 15px 30px; border-bottom: 2px solid #e3f2fd;
+            display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
         }
-        .security-advice ul {
-            margin: 10px 0;
-            padding-left: 20px;
+        .nav-bar a {
+            color: #1976d2; text-decoration: none; font-weight: 600;
+            padding: 8px 16px; border-radius: 20px; transition: all 0.3s ease; margin: 2px;
         }
-        .security-advice li {
-            margin: 5px 0;
-            color: #2e7d32;
+        .nav-bar a:hover { background: #1976d2; color: white; }
+        .nav-info { color: #666; font-size: 0.9em; }
+        
+        .content { padding: 30px; }
+        
+        .table-container {
+            width: 100%; overflow-x: auto; border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(13, 71, 161, 0.15); border: 2px solid #e3f2fd;
         }
-        .download-link {
-            background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
-            border: 2px solid #4caf50;
-            border-left: 6px solid #2e7d32;
-            padding: 20px;
-            margin: 15px 0;
-            border-radius: 8px;
-            text-align: center;
+        table {
+            width: 100%; min-width: 1000px; border-collapse: collapse;
+            background: white; table-layout: fixed;
         }
-        .download-link a {
-            color: #2e7d32;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 1.1em;
+        /* OPTIMIERTE SPALTENBREITEN FÜR LANGE DATEINAMEN */
+        table colgroup col:nth-child(1) { width: 20%; } /* Dateiname breiter */
+        table colgroup col:nth-child(2) { width: 40%; } /* Pfad schmaler */
+        table colgroup col:nth-child(3) { width: 15%; } /* Version */
+        table colgroup col:nth-child(4) { width: 10%; } /* Größe */
+        table colgroup col:nth-child(5) { width: 15%; } /* Erstellt */
+        
+        th {
+            background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%);
+            color: white; padding: 18px 15px; text-align: left;
+            font-weight: 600; text-transform: uppercase; font-size: 0.95em;
+            position: sticky; top: 0; z-index: 10;
         }
-        .download-link a:hover {
-            color: #1b5e20;
-            text-decoration: underline;
+        td { 
+            padding: 12px 8px; border-bottom: 1px solid #e3f2fd; 
+            vertical-align: top; word-wrap: break-word; overflow-wrap: break-word;
+        }
+        tr:nth-child(even) { background: #f8fbff; }
+        tr:hover { background: #e3f2fd; transform: scale(1.001); }
+        
+        /* VERBESSERTE ZELLEN-FORMATIERUNG */
+        .filename-cell { 
+            font-weight: 600; color: #0d47a1; font-size: 0.9em;
+            max-width: 0; /* Ermöglicht Textumbruch */
+            word-break: break-word;
+            hyphens: auto;
+            line-height: 1.3;
+        }
+        
+        .filename-cell:hover {
+            background: rgba(13, 71, 161, 0.1);
+            cursor: help;
+        }
+        
+        /* Tooltip für vollständigen Dateinamen */
+        .filename-cell[title] {
+            position: relative;
+        }
+        
+        .path-cell {
+            font-family: 'Courier New', monospace; font-size: 0.8em;
+            color: #1565c0; word-break: break-all; max-width: 0;
+            line-height: 1.2;
+        }
+        
+        .version-cell {
+            font-weight: bold; color: #0d47a1; text-align: center;
+            background: rgba(187, 222, 251, 0.2); padding: 4px 8px; 
+            border-radius: 12px; font-size: 0.85em;
+        }
+        
+        .size-cell { 
+            text-align: right; font-weight: 600; color: #1976d2; 
+            font-family: 'Courier New', monospace; font-size: 0.9em;
+        }
+        
+        .date-cell { 
+            font-size: 0.85em; color: #666; white-space: nowrap;
+        }
+        
+        /* RESPONSIVE VERBESSERUNGEN */
+        @media screen and (max-width: 1200px) {
+            table { min-width: 900px; }
+            .filename-cell, .path-cell { font-size: 0.8em; }
+        }
+        
+        @media screen and (max-width: 768px) {
+            .nav-bar { flex-direction: column; text-align: center; }
+            .nav-bar > div { margin: 5px 0; }
+            table { min-width: 700px; }
+            th, td { padding: 10px 6px; }
+            .header h1 { font-size: 2em; }
+            .header .range-info { font-size: 0.8em; padding: 8px 15px; }
+        }
+        
+        .footer {
+            background: #e3f2fd; padding: 20px; text-align: center;
+            border-top: 3px solid #1976d2; color: #0d47a1;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>File Search Report</h1>
-            <p>Generiert am $(Get-Date -Format 'dd.MM.yyyy um HH:mm:ss')</p>
+            <h1>📄 Teil $PartNumber</h1>
+            <p>Zeilen $StartIndex - $EndIndex von $TotalFiles</p>
+            <div class="range-info">
+                Von: <strong>$FirstFile</strong><br>
+                Bis: <strong>$LastFile</strong>
+            </div>
+        </div>
+        
+        <div class="nav-bar">
+            <div>
+                <a href="index.html">🏠 Zur Übersicht</a>
+"@
+
+    # Navigations-Links zu anderen Teilen (mit korrekten Dateinamen)
+    $totalParts = [Math]::Ceiling($TotalFiles / 500)
+    
+    if ($PartNumber -gt 1) {
+        # Bestimme Dateiname des vorherigen Teils
+        $prevStartIndex = ($PartNumber - 2) * 500
+        $prevEndIndex = [Math]::Min(($prevStartIndex + 499), ($TotalFiles - 1))
+        $sortedResults = $global:searchResults | Sort-Object Name
+        $prevFirstFile = $sortedResults[$prevStartIndex].Name
+        $prevLastFile = $sortedResults[$prevEndIndex].Name
+        
+        $prevFirstShort = if ($prevFirstFile.Length -gt 20) { $prevFirstFile.Substring(0, 17) + "..." } else { $prevFirstFile }
+        $prevLastShort = if ($prevLastFile.Length -gt 20) { $prevLastFile.Substring(0, 17) + "..." } else { $prevLastFile }
+        $prevPartFileName = "Teil$($PartNumber - 1)" + "_" + ($prevFirstShort -replace '[<>:"/\\|?*]', '_') + "-bis-" + ($prevLastShort -replace '[<>:"/\\|?*]', '_') + ".html"
+        
+        if ($prevPartFileName.Length -gt 80) {
+            $prevPartFileName = "Teil$($PartNumber - 1)" + "_Zeilen$(($prevStartIndex + 1))-$(($prevEndIndex + 1)).html"
+        }
+        
+        $htmlContent += "<a href='$prevPartFileName'>⬅️ Teil $($PartNumber - 1)</a>"
+    }
+    
+    if ($PartNumber -lt $totalParts) {
+        # Bestimme Dateiname des nächsten Teils
+        $nextStartIndex = $PartNumber * 500
+        $nextEndIndex = [Math]::Min(($nextStartIndex + 499), ($TotalFiles - 1))
+        $sortedResults = $global:searchResults | Sort-Object Name
+        $nextFirstFile = $sortedResults[$nextStartIndex].Name
+        $nextLastFile = $sortedResults[$nextEndIndex].Name
+        
+        $nextFirstShort = if ($nextFirstFile.Length -gt 20) { $nextFirstFile.Substring(0, 17) + "..." } else { $nextFirstFile }
+        $nextLastShort = if ($nextLastFile.Length -gt 20) { $nextLastFile.Substring(0, 17) + "..." } else { $nextLastFile }
+        $nextPartFileName = "Teil$($PartNumber + 1)" + "_" + ($nextFirstShort -replace '[<>:"/\\|?*]', '_') + "-bis-" + ($nextLastShort -replace '[<>:"/\\|?*]', '_') + ".html"
+        
+        if ($nextPartFileName.Length -gt 80) {
+            $nextPartFileName = "Teil$($PartNumber + 1)" + "_Zeilen$(($nextStartIndex + 1))-$(($nextEndIndex + 1)).html"
+        }
+        
+        $htmlContent += "<a href='$nextPartFileName'>Teil $($PartNumber + 1) ➡️</a>"
+    }
+
+    $htmlContent += @"
+            </div>
+            <div class="nav-info">
+                $($Files.Count) Dateien | Teil $PartNumber von $totalParts
+            </div>
         </div>
         
         <div class="content">
-            <div class="info-section">
-                <h3>Suchparameter</h3>
-                <p><strong>Dateiname:</strong> $($filenameTextBox.Text)</p>
-                <p><strong>Suchpfad:</strong> $($pathTextBox.Text)</p>
-                <p><strong>Gefundene Dateien:</strong> $($global:searchResults.Count)</p>
-            </div>
+            <div class="table-container">
+                <table>
+                    <colgroup>
+                        <col style="width: 20%;"><col style="width: 40%;"><col style="width: 15%;">
+                        <col style="width: 10%;"><col style="width: 15%;">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>Dateiname</th><th>Pfad</th><th>Version</th>
+                            <th>Größe (KB)</th><th>Erstellt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
 "@
 
-            # Sicherheitsanalyse für libcurl.dll hinzufügen
-            if ($filenameTextBox.Text -like "*libcurl*") {
-                $analysis = Analyze-LibcurlSecurity
-                if ($analysis.RiskyFiles.Count -gt 0) {
-                    $htmlContent += @"
-            <div class="security-warning">
-                <h3>⚠️ SICHERHEITSWARNUNG - libcurl.dll</h3>
-                <p><strong>$($analysis.RiskyFiles.Count) potentiell gefährliche Dateien gefunden!</strong></p>
-                <div class="warning-details">
-                    <h4>Riskante Dateien:</h4>
+    foreach ($file in $Files) {
+        # Tooltip mit vollständigem Dateinamen falls gekürzt
+        $tooltipTitle = if ($file.Name.Length -gt 50) { "title=`"$($file.Name)`"" } else { "" }
+        
+        $htmlContent += @"
+                        <tr>
+                            <td class="filename-cell" $tooltipTitle>$($file.Name)</td>
+                            <td class="path-cell">$($file.Path)</td>
+                            <td class="version-cell">$($file.Version)</td>
+                            <td class="size-cell">$($file.Size)</td>
+                            <td class="date-cell">$($file.Created)</td>
+                        </tr>
 "@
-                    foreach ($risky in $analysis.RiskyFiles) {
-                        $htmlContent += @"
-                    <div class="risk-item risk-$($risky.RiskLevel.ToLower())">
-                        <strong>$($risky.RiskLevel):</strong> $($risky.Path)<br>
-                        <small>Version: $($risky.Version) | Erstellt: $($risky.Created)<br>
-                        Grund: $($risky.Reason)</small>
-                    </div>
-"@
-                    }
-                    $htmlContent += @"
-                </div>
-                <div class="security-advice">
-                    <h4>🔒 Empfohlene Maßnahmen:</h4>
-                    <ul>
-                        <li>Aktualisierung auf libcurl 7.68.0+ (2020 oder neuer)</li>
-                        <li>Entfernung veralteter Versionen (besonders 0.0.0.0 aus 2013)</li>
-                        <li>Überprüfung der Anwendungen die libcurl verwenden</li>
-                        <li>Regelmäßige Sicherheitsupdates implementieren</li>
-                    </ul>
-                    <div class="download-link">
-                        <p><strong>📥 AKTUELLE VERSION HERUNTERLADEN:</strong><br>
-                        <a href="https://curl.se/download.html" target="_blank">https://curl.se/download.html</a></p>
-                    </div>
-                    <p><strong>Weitere Informationen:</strong> <a href="https://curl.se/libcurl/security.html" target="_blank">curl.se/libcurl/security.html</a></p>
-                </div>
+    }
+
+    $htmlContent += @"
+                    </tbody>
+                </table>
             </div>
-"@
-                }
-            }
-            
-            $htmlContent += @"
-            <div class="summary">
-                <div class="summary-item">
-                    <h4>$($global:searchResults.Count)</h4>
-                    <p>Gefundene Dateien</p>
-                </div>
-                <div class="summary-item">
-                    <h4>$([math]::Round(($global:searchResults | Measure-Object -Property Size -Sum).Sum, 2))</h4>
-                    <p>Gesamt KB</p>
-                </div>
-                <div class="summary-item">
-                    <h4>$(($global:searchResults | Where-Object {$_.Version -ne "N/A"}).Count)</h4>
-                    <p>Mit Versionsinformation</p>
-                </div>
-            </div>
-            
-            <table>
-                <thead>
-                    <tr>
-                        <th>Dateiname</th>
-                        <th>Pfad</th>
-                        <th>Version</th>
-                        <th>Größe (KB)</th>
-                        <th>Erstellt</th>
-                    </tr>
-                </thead>
-                <tbody>
-"@
-            
-            foreach ($result in $global:searchResults) {
-                $htmlContent += @"
-                    <tr>
-                        <td>$($result.Name)</td>
-                        <td class="path-cell">$($result.Path)</td>
-                        <td class="version-cell">$($result.Version)</td>
-                        <td class="size-cell">$($result.Size)</td>
-                        <td>$($result.Created)</td>
-                    </tr>
-"@
-            }
-            
-            $htmlContent += @"
-                </tbody>
-            </table>
         </div>
         
         <div class="footer">
-            <p>© 2025 Jörn Walter - <a href="https://www.der-windows-papst.de" style="color: #1565c0;">https://www.der-windows-papst.de</a></p>
-            <p>Erstellt mit File Search Tool</p>
+            <p>© 2025 Jörn Walter - File Search Tool v1.2</p>
+            <p>Teil $PartNumber von $totalParts | $FirstFile bis $LastFile</p>
         </div>
     </div>
 </body>
 </html>
 "@
-            
-            $htmlContent | Out-File -FilePath $saveDialog.FileName -Encoding UTF8
-            [System.Windows.Forms.MessageBox]::Show("HTML-Bericht erfolgreich erstellt:`n$($saveDialog.FileName)", "Erfolg", "OK", "Information")
-            
-            # Fragen ob Bericht geöffnet werden soll
-            $result = [System.Windows.Forms.MessageBox]::Show("Möchtest du den Bericht jetzt öffnen?", "Bericht öffnen", "YesNo", "Question")
-            if ($result -eq "Yes") {
-                Start-Process $saveDialog.FileName
-            }
+
+    $htmlContent | Out-File -FilePath $FilePath -Encoding UTF8
+}
+
+# Funktion: Einzelner Bericht (eine HTML-Datei)
+function Create-SingleReport {
+    param(
+        [string]$FilePath
+    )
+    
+    Write-Host "Erstelle einzelnen Bericht..."
+    
+    $sortedResults = $global:searchResults | Sort-Object Name
+    $totalSize = [math]::Round(($global:searchResults | Measure-Object -Property Size -Sum).Sum / 1024, 2)
+    $withVersion = ($global:searchResults | Where-Object {$_.Version -ne "N/A"}).Count
+    
+    $htmlContent = @"
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Search Report</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0; padding: 20px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
         }
-        catch {
-            [System.Windows.Forms.MessageBox]::Show("Fehler beim Erstellen des Berichts: $($_.Exception.Message)", "Fehler", "OK", "Error")
+        .container {
+            max-width: 1400px; margin: 0 auto; background: white;
+            border-radius: 15px; box-shadow: 0 15px 35px rgba(13, 71, 161, 0.2); overflow: hidden;
         }
+        .header {
+            background: linear-gradient(135deg, #0d47a1 0%, #1565c0 100%);
+            color: white; padding: 40px; text-align: center;
+        }
+        .header h1 { margin: 0; font-size: 2.8em; font-weight: 300; }
+        .header p { margin: 15px 0 0 0; opacity: 0.95; font-size: 1.2em; }
+        .content { padding: 40px; }
+        
+        .summary {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px; margin-bottom: 30px;
+        }
+        .summary-item {
+            text-align: center; background: white; padding: 25px; border-radius: 12px;
+            box-shadow: 0 6px 20px rgba(13, 71, 161, 0.12); border: 2px solid #e3f2fd;
+            border-top: 4px solid #1976d2;
+        }
+        .summary-item h4 { margin: 0; color: #0d47a1; font-size: 2.2em; font-weight: 700; }
+        .summary-item p { margin: 10px 0 0 0; color: #1565c0; font-weight: 500; }
+        
+        .table-container {
+            width: 100%; overflow-x: auto; border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(13, 71, 161, 0.15); border: 2px solid #e3f2fd;
+        }
+        table {
+            width: 100%; min-width: 1000px; border-collapse: collapse;
+            background: white; table-layout: fixed;
+        }
+        table colgroup col:nth-child(1) { width: 15%; }
+        table colgroup col:nth-child(2) { width: 45%; }
+        table colgroup col:nth-child(3) { width: 15%; }
+        table colgroup col:nth-child(4) { width: 10%; }
+        table colgroup col:nth-child(5) { width: 15%; }
+        
+        th {
+            background: linear-gradient(135deg, #0d47a1 0%, #1976d2 100%);
+            color: white; padding: 18px 15px; text-align: left; font-weight: 600;
+            text-transform: uppercase; font-size: 0.95em; position: sticky; top: 0; z-index: 10;
+        }
+        td { padding: 15px; border-bottom: 1px solid #e3f2fd; vertical-align: top; }
+        tr:nth-child(even) { background: #f8fbff; }
+        tr:hover { background: #e3f2fd; }
+        
+        .filename-cell { font-weight: 600; color: #0d47a1; }
+        .path-cell { font-family: 'Courier New', monospace; font-size: 0.85em; color: #1565c0; word-break: break-all; }
+        .version-cell { font-weight: bold; color: #0d47a1; text-align: center; background: rgba(187, 222, 251, 0.2); padding: 6px 10px; border-radius: 15px; }
+        .size-cell { text-align: right; font-weight: 600; color: #1976d2; font-family: monospace; }
+        .date-cell { font-size: 0.9em; color: #666; }
+        
+        .footer { background: #e3f2fd; padding: 25px; text-align: center; border-top: 3px solid #1976d2; color: #0d47a1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📄 File Search Report</h1>
+            <p>Einzelner Bericht | Erstellt am $(Get-Date -Format 'dd.MM.yyyy um HH:mm:ss')</p>
+        </div>
+        
+        <div class="content">
+            <div class="summary">
+                <div class="summary-item">
+                    <h4>$($sortedResults.Count)</h4>
+                    <p>Gefundene Dateien</p>
+                </div>
+                <div class="summary-item">
+                    <h4>$totalSize</h4>
+                    <p>Gesamt MB</p>
+                </div>
+                <div class="summary-item">
+                    <h4>$withVersion</h4>
+                    <p>Mit Versionsinformation</p>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table>
+                    <colgroup>
+                        <col style="width: 15%;"><col style="width: 45%;"><col style="width: 15%;">
+                        <col style="width: 10%;"><col style="width: 15%;">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>Dateiname</th><th>Pfad</th><th>Version</th>
+                            <th>Größe (KB)</th><th>Erstellt</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+"@
+
+    foreach ($result in $sortedResults) {
+        $htmlContent += @"
+                        <tr>
+                            <td class="filename-cell">$($result.Name)</td>
+                            <td class="path-cell">$($result.Path)</td>
+                            <td class="version-cell">$($result.Version)</td>
+                            <td class="size-cell">$($result.Size)</td>
+                            <td class="date-cell">$($result.Created)</td>
+                        </tr>
+"@
     }
+
+    $htmlContent += @"
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>© 2025 Jörn Walter - <a href="https://www.der-windows-papst.de" style="color: #1565c0; text-decoration: none;">https://www.der-windows-papst.de</a></p>
+            <p>File Search Tool v1.2 - Einzelner Bericht</p>
+        </div>
+    </div>
+</body>
+</html>
+"@
+
+    $htmlContent | Out-File -FilePath $FilePath -Encoding UTF8
+    
+    [System.Windows.Forms.MessageBox]::Show("Einzelner HTML-Bericht erstellt:`n$FilePath", "Erfolg", "OK", "Information")
+    
+    $result = [System.Windows.Forms.MessageBox]::Show("Möchtest du den Bericht jetzt öffnen?", "Bericht öffnen", "YesNo", "Question")
+    if ($result -eq "Yes") {
+        Start-Process $FilePath
+    }
+}
+
+# Funktion: Sicherheitsbericht erstellen (wiederverwendet)
+function Create-SecurityFile {
+    param(
+        [string]$FilePath,
+        [object]$Analysis,
+        [string]$ReportName
+    )
+    
+    $htmlContent = @"
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>$ReportName - Sicherheitsbericht</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; }
+        .warning { background: #fff3e0; border: 2px solid #ff9800; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .warning h2 { color: #e65100; margin: 0 0 15px 0; }
+        .risk-high { background: #ffebee; border-left: 4px solid #f44336; padding: 15px; margin: 10px 0; }
+        .risk-medium { background: #fff8e1; border-left: 4px solid #ffc107; padding: 15px; margin: 10px 0; }
+        .nav-bar { padding: 15px; background: #e3f2fd; margin-bottom: 20px; border-radius: 8px; }
+        .nav-bar a { color: #1976d2; text-decoration: none; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="nav-bar">
+            <a href="index.html">🏠 Zurück zur Übersicht</a>
+        </div>
+        
+        <h1>🔒 Sicherheitsbericht</h1>
+        
+        <div class="warning">
+            <h2>⚠️ SICHERHEITSWARNUNG</h2>
+            <p><strong>$($Analysis.RiskyFiles.Count) potentiell gefährliche Dateien gefunden!</strong></p>
+        </div>
+        
+        <h3>🚨 Riskante Dateien:</h3>
+"@
+
+    foreach ($risky in $Analysis.RiskyFiles) {
+        $cssClass = switch ($risky.RiskLevel) {
+            "KRITISCH" { "risk-high" }
+            "HOCH" { "risk-high" }
+            default { "risk-medium" }
+        }
+        
+        $htmlContent += @"
+        <div class="$cssClass">
+            <strong>$($risky.RiskLevel):</strong> $($risky.Path)<br>
+            <small>Version: $($risky.Version) | Erstellt: $($risky.Created)<br>
+            Grund: $($risky.Reason)</small>
+        </div>
+"@
+    }
+
+    $htmlContent += @"
+        <h3>📋 Empfohlene Maßnahmen:</h3>
+        <ul>
+            <li>Aktualisierung auf libcurl 8.15.0+ (neueste Version)</li>
+            <li>Entfernung veralteter Versionen (besonders 0.0.0.0 aus 2013)</li>
+            <li>Überprüfung der Anwendungen die libcurl verwenden</li>
+            <li>Regelmäßige Sicherheitsupdates implementieren</li>
+        </ul>
+        
+        <p><strong>📥 AKTUELLE VERSION HERUNTERLADEN:</strong><br>
+        <a href="https://curl.se/download.html" target="_blank">https://curl.se/download.html</a></p>
+    </div>
+</body>
+</html>
+"@
+
+    $htmlContent | Out-File -FilePath $FilePath -Encoding UTF8
 }
 
 # Event Handlers
