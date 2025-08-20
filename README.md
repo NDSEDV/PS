@@ -43,3 +43,6 @@ https://www.der-windows-papst.de/2025/06/07/iis-inetpub-folder-acl-manager/
 
 libcurl-Bibliotheken können Sicherheitslücken aufweisen
 https://www.der-windows-papst.de/2025/07/29/libcurl-bibliotheken-koennen-sicherheitsluecken-aufweisen/
+
+Warum ich von Microsoft Office zu LibreOffice gewechselt bin – und du es auch solltest
+https://www.der-windows-papst.de/2025/08/20/office-zu-libreoffice-konverter/
