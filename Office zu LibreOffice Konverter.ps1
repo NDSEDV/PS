@@ -79,7 +79,7 @@ function Update-ButtonStates {
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Office zu LibreOffice Konverter v1.3 - © 2025 Jörn Walter" 
-        Height="1000" Width="900" MinHeight="800" MaxHeight="1200"
+        Height="1030" Width="900" MinHeight="800" MaxHeight="1200"
         WindowStartupLocation="CenterScreen" SizeToContent="Manual" ResizeMode="CanResize"
         Background="#F5F5F5">
     <Window.Resources>
