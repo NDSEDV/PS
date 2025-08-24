@@ -1,13 +1,14 @@
-﻿<#
+<#
 .SYNOPSIS
   Office zu LibreOffice Konverter
 .DESCRIPTION
  Voraussetzung: LibreOffice muss installiert sein
 .PARAMETER language
 .NOTES
-  Version:        1.1
+  Version:        1.3
   Author:         Jörn Walter
   Creation Date:  2025-08-20
+  Update:         2025-08-24 - Lösch- und Verschiebefunktion für Quelldateien
 #>
 
 # Funktion zum Überprüfen, ob das Skript mit Administratorrechten ausgeführt wird
@@ -73,13 +74,13 @@ function Update-ButtonStates {
     $btnConvert.IsEnabled = ($selectedFiles.Count -gt 0) -and (-not $script:cancelRequested)
 }
 
-# XAML GUI Definition
+# XAML GUI Definition - Komplett neu und bereinigt
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Office zu LibreOffice Konverter - © 2025 Jörn Walter" 
-        Height="870" Width="900"
-        WindowStartupLocation="CenterScreen"
+        Title="Office zu LibreOffice Konverter v1.3 - © 2025 Jörn Walter" 
+        Height="1000" Width="900" MinHeight="800" MaxHeight="1200"
+        WindowStartupLocation="CenterScreen" SizeToContent="Manual" ResizeMode="CanResize"
         Background="#F5F5F5">
     <Window.Resources>
         <Style TargetType="Button">
@@ -108,8 +109,10 @@ function Update-ButtonStates {
         </Style>
     </Window.Resources>
     
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
     <Grid Margin="10">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -125,7 +128,7 @@ function Update-ButtonStates {
                 <TextBlock Text="Office zu LibreOffice Konverter" FontSize="20" FontWeight="Bold" Foreground="#333"/>
                 <TextBlock Text="Konvertiert DOCX, XLSX und PPTX Dateien in LibreOffice Formate" FontSize="12" Foreground="#666" Margin="0,5,0,0"/>
                 <TextBlock FontSize="10" Foreground="#888" Margin="0,3,0,0">
-                    <Run Text="Entwickelt von Jörn Walter - Der Windows Papst"/>
+                    <Run Text="Entwickelt von Jörn Walter - Der Windows Papst (v1.3)"/>
                 </TextBlock>
             </StackPanel>
         </Border>
@@ -164,7 +167,7 @@ function Update-ButtonStates {
                                Foreground="#666" FontStyle="Italic" Margin="85,5,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
                 
-                <!-- Allgemeine Aktionsbuttons - IMMER sichtbar -->
+                <!-- Allgemeine Aktionsbuttons -->
                 <WrapPanel Margin="0,15,0,0" HorizontalAlignment="Right">
                     <Button Name="btnClearFiles" Content="❌ Liste leeren" Width="120" IsEnabled="False"/>
                     <Button Name="btnSearch" Content="🔍 Dateien suchen" Width="150" Visibility="Collapsed"/>
@@ -173,16 +176,16 @@ function Update-ButtonStates {
         </Border>
         
         <!-- Dateiliste -->
-        <Border Grid.Row="2" Background="White" CornerRadius="5" Padding="10" Height="250">
+        <Border Grid.Row="2" Background="White" CornerRadius="5" Padding="10" Height="200">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
                 
-                <TextBlock Grid.Row="0" Text="Zu konvertierende Dateien (Klick auf Zeile öffnet Ordner):" FontWeight="Bold" Margin="0,0,0,5"/>
+                <TextBlock Grid.Row="0" Text="Zu konvertierende Dateien (Doppelklick öffnet Ordner):" FontWeight="Bold" Margin="0,0,0,5"/>
                 <DataGrid Grid.Row="1" Name="dgFiles" AutoGenerateColumns="False" CanUserAddRows="False" 
-                          GridLinesVisibility="Horizontal" HeadersVisibility="Column" Height="200"
+                          GridLinesVisibility="Horizontal" HeadersVisibility="Column" Height="160"
                           RowHeight="25" CanUserResizeRows="False" ScrollViewer.VerticalScrollBarVisibility="Auto">
                     <DataGrid.Columns>
                         <DataGridCheckBoxColumn Header="Auswahl" Binding="{Binding Selected}" Width="60"/>
@@ -204,36 +207,90 @@ function Update-ButtonStates {
                     <CheckBox Name="chkConvertDocx" Content="DOCX → ODT" IsChecked="True"/>
                     <CheckBox Name="chkConvertXlsx" Content="XLSX → ODS" IsChecked="True" Margin="20,5,5,5"/>
                     <CheckBox Name="chkConvertPptx" Content="PPTX → ODP" IsChecked="True" Margin="20,5,5,5"/>
-                    <CheckBox Name="chkOverwrite" Content="Vorhandene Dateien überschreiben" Margin="40,5,5,5"/>
+                </WrapPanel>
+                <WrapPanel Margin="0,5,0,0">
+                    <CheckBox Name="chkOverwrite" Content="Vorhandene Dateien überschreiben" Margin="5"/>
                 </WrapPanel>
             </StackPanel>
         </Border>
         
+        <!-- Quelldateien-Optionen -->
+        <Border Grid.Row="4" Background="White" CornerRadius="5" Padding="10" Margin="0,10,0,0">
+            <StackPanel>
+                <TextBlock Text="Quelldateien nach erfolgreicher Konvertierung:" FontWeight="Bold" Margin="0,0,0,5"/>
+                
+                <WrapPanel Margin="0,5,0,0">
+                    <RadioButton Name="rbKeepSource" Content="📄 Behalten (keine Aktion)" IsChecked="True" Margin="5"/>
+                    <RadioButton Name="rbDeleteSource" Content="🗑️ Löschen (unwiderruflich)" 
+                                 Foreground="#D13438" FontWeight="Bold" Margin="20,5,5,5"/>
+                    <RadioButton Name="rbMoveSource" Content="📦 Verschieben (sicher)" 
+                                 Foreground="#0078D4" FontWeight="Bold" Margin="20,5,5,5"/>
+                </WrapPanel>
+                
+                <!-- Verschieben-Optionen -->
+                <StackPanel Name="spMoveOptions" Visibility="Collapsed" Margin="0,10,0,0">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Zielordner:" Width="90"/>
+                        <TextBox Name="txtMoveFolder" Width="380" Margin="5,0"/>
+                        <Button Name="btnBrowseMove" Content="Durchsuchen..." Width="100"/>
+                    </StackPanel>
+                    <CheckBox Name="chkCreateSubfolders" Content="Unterordner nach Dateityp erstellen (DOCX, XLSX, PPTX)" 
+                              IsChecked="True" Margin="95,5,0,0"/>
+                    <CheckBox Name="chkAddTimestamp" Content="Zeitstempel zu Ordnernamen hinzufügen" 
+                              IsChecked="True" Margin="95,5,0,0"/>
+                </StackPanel>
+                
+                <!-- Warnungen -->
+                <Border Name="deleteWarning" Background="#FFF4E6" BorderBrush="#FF8C00" BorderThickness="1" 
+                        CornerRadius="3" Padding="8" Margin="0,5,0,0" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="⚠️" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#B8860B" FontWeight="SemiBold">
+                            <Run Text="ACHTUNG: Die Quelldateien werden unwiderruflich gelöscht! "/>
+                            <Run Text="Stelle sicher, dass du Backups hast." FontWeight="Bold"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+                
+                <Border Name="moveInfo" Background="#E3F2FD" BorderBrush="#0078D4" BorderThickness="1" 
+                        CornerRadius="3" Padding="8" Margin="0,5,0,0" Visibility="Collapsed">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="💡" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock TextWrapping="Wrap" Foreground="#1565C0" FontWeight="SemiBold">
+                            <Run Text="INFO: Quelldateien werden sicher verschoben. "/>
+                            <Run Text="Du kannst sie jederzeit wiederherstellen." FontWeight="Bold"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Border>
+        
         <!-- Fortschritt -->
-        <StackPanel Grid.Row="4" Margin="0,10,0,0">
-            <ProgressBar Name="pbProgress" Height="25" Minimum="0" Maximum="100" IsIndeterminate="False"/>
-            <TextBlock Name="txtStatus" Text="Bereit" HorizontalAlignment="Center" Margin="0,5,0,0" TextWrapping="Wrap"/>
+        <StackPanel Grid.Row="5" Margin="0,5,0,0">
+            <ProgressBar Name="pbProgress" Height="20" Minimum="0" Maximum="100" IsIndeterminate="False"/>
+            <TextBlock Name="txtStatus" Text="Bereit" HorizontalAlignment="Center" Margin="0,3,0,0" TextWrapping="Wrap"/>
         </StackPanel>
         
         <!-- Buttons -->
-        <WrapPanel Grid.Row="5" HorizontalAlignment="Center" Margin="0,10,0,0">
-            <Button Name="btnConvert" Content="▶ Konvertierung starten" Width="180" Height="35" FontSize="14" FontWeight="Bold"/>
-            <Button Name="btnCancel" Content="⏹ Abbrechen" Width="120" Height="35" FontSize="14" IsEnabled="False"/>
+        <WrapPanel Grid.Row="6" HorizontalAlignment="Center" Margin="0,5,0,0">
+            <Button Name="btnConvert" Content="▶ Konvertierung starten" Width="180" Height="32" FontSize="14" FontWeight="Bold"/>
+            <Button Name="btnCancel" Content="⏹ Abbrechen" Width="120" Height="32" FontSize="14" IsEnabled="False"/>
         </WrapPanel>
         
         <!-- Copyright Footer -->
-        <Border Grid.Row="6" Background="#E0E0E0" CornerRadius="5" Padding="10" Margin="0,10,0,0">
+        <Border Grid.Row="7" Background="#E0E0E0" CornerRadius="5" Padding="8" Margin="0,5,0,0">
             <StackPanel>
-                <TextBlock HorizontalAlignment="Center" FontSize="11">
+                <TextBlock HorizontalAlignment="Center" FontSize="10">
                     <Run Text="© 2025 Jörn Walter - " Foreground="#555"/>
                     <Hyperlink Name="lnkWebsite" NavigateUri="https://www.der-windows-papst.de" Foreground="#0078D4">
-                        <Run Text="https://www.der-windows-papst.de"/>
+                        <Run Text="www.der-windows-papst.de"/>
                     </Hyperlink>
+                    <Run Text=" | Office zu LibreOffice Konverter v1.3" Foreground="#777"/>
                 </TextBlock>
-                <TextBlock Text="Office zu LibreOffice Konverter v1.1" HorizontalAlignment="Center" FontSize="10" Foreground="#777" Margin="0,2,0,0"/>
             </StackPanel>
         </Border>
     </Grid>
+    </ScrollViewer>
 </Window>
 "@
 
@@ -259,6 +316,19 @@ $chkConvertDocx = $window.FindName("chkConvertDocx")
 $chkConvertXlsx = $window.FindName("chkConvertXlsx")
 $chkConvertPptx = $window.FindName("chkConvertPptx")
 $chkOverwrite = $window.FindName("chkOverwrite")
+
+# Neue Controls für Quelldateien-Optionen
+$rbKeepSource = $window.FindName("rbKeepSource")
+$rbDeleteSource = $window.FindName("rbDeleteSource")
+$rbMoveSource = $window.FindName("rbMoveSource")
+$spMoveOptions = $window.FindName("spMoveOptions")
+$txtMoveFolder = $window.FindName("txtMoveFolder")
+$btnBrowseMove = $window.FindName("btnBrowseMove")
+$chkCreateSubfolders = $window.FindName("chkCreateSubfolders")
+$chkAddTimestamp = $window.FindName("chkAddTimestamp")
+$deleteWarning = $window.FindName("deleteWarning")
+$moveInfo = $window.FindName("moveInfo")
+
 $pbProgress = $window.FindName("pbProgress")
 $txtStatus = $window.FindName("txtStatus")
 $btnSearch = $window.FindName("btnSearch")
@@ -282,6 +352,10 @@ $dgFiles.ItemsSource = $script:files
 # Initial UI-Setup
 $btnSearch.Visibility = "Collapsed"
 
+# Standard-Pfad für Verschieben setzen
+$defaultMoveFolder = Join-Path ([Environment]::GetFolderPath("Desktop")) "Office_Originaldateien"
+$txtMoveFolder.Text = $defaultMoveFolder
+
 # LibreOffice Check
 if (-not $script:libreOfficePath) {
     [System.Windows.MessageBox]::Show(
@@ -297,6 +371,25 @@ if (-not $script:libreOfficePath) {
 # Timer für Progress Updates
 $script:timer = New-Object System.Windows.Threading.DispatcherTimer
 $script:timer.Interval = [TimeSpan]::FromMilliseconds(100)
+
+# Event Handler für Quelldateien-Optionen
+$rbKeepSource.Add_Checked({
+    $spMoveOptions.Visibility = "Collapsed"
+    $deleteWarning.Visibility = "Collapsed"
+    $moveInfo.Visibility = "Collapsed"
+})
+
+$rbDeleteSource.Add_Checked({
+    $spMoveOptions.Visibility = "Collapsed"
+    $deleteWarning.Visibility = "Visible"
+    $moveInfo.Visibility = "Collapsed"
+})
+
+$rbMoveSource.Add_Checked({
+    $spMoveOptions.Visibility = "Visible"
+    $deleteWarning.Visibility = "Collapsed"
+    $moveInfo.Visibility = "Visible"
+})
 
 # Hilfsfunktionen
 function Get-FileExtensions {
@@ -314,17 +407,20 @@ function Add-FileToList {
     $fileObj = [PSCustomObject]@{
         Selected = $true
         Name = $file.Name
-        Extension = $file.Extension
+        Extension = $file.Extension.ToLower()  # Normalisiere Extension
         Size = "{0:N2} KB" -f ($file.Length / 1KB)
         Path = $file.DirectoryName
         FullPath = $file.FullName
         Status = "Bereit"
+        SourceDeleted = $false
+        SourceMoved = $false
+        MovedTo = ""
     }
     
     # UI-Update im Dispatcher
     $window.Dispatcher.Invoke([System.Action]{
         $script:files.Add($fileObj)
-        Update-ButtonStates  # Button-Status aktualisieren
+        Update-ButtonStates
     })
 }
 
@@ -333,6 +429,8 @@ function Generate-HTMLReport {
         [array]$ConvertedFiles,
         [int]$SuccessCount,
         [int]$FailCount,
+        [int]$DeletedCount,
+        [int]$MovedCount,
         [string]$Duration,
         [datetime]$StartTime
     )
@@ -344,12 +442,11 @@ function Generate-HTMLReport {
     $reportFileName = "LibreOffice_Konvertierung_$(Get-Date -Format 'yyyyMMdd_HHmmss').html"
     $reportPath = Join-Path $desktopPath $reportFileName
     
-    # Sicherstellen, dass Desktop-Pfad existiert (sollte immer der Fall sein)
+    # Sicherstellen, dass Desktop-Pfad existiert
     if (-not (Test-Path $desktopPath)) {
         Write-Warning "Desktop-Pfad nicht gefunden, verwende Fallback-Pfad"
         $reportPath = Join-Path $env:USERPROFILE "Desktop\$reportFileName"
         
-        # Wenn auch das nicht funktioniert, verwende Temp als letzten Ausweg
         if (-not (Test-Path (Split-Path $reportPath))) {
             $reportPath = Join-Path $env:TEMP $reportFileName
         }
@@ -359,24 +456,16 @@ function Generate-HTMLReport {
     $totalFiles = $ConvertedFiles.Count
     $successRate = if ($totalFiles -gt 0) { [math]::Round(($SuccessCount / $totalFiles) * 100, 1) } else { 0 }
     
-    # Gruppierung nach Status - sicherstellen dass Arrays zurückgegeben werden
-    $successFiles = @($ConvertedFiles | Where-Object { $_.Status -eq "✓ Erfolgreich" })
+    # Gruppierung nach Status
+    $successFiles = @($ConvertedFiles | Where-Object { $_.Status -match "✓ Erfolgreich" })
     $failedFiles = @($ConvertedFiles | Where-Object { $_.Status -eq "✗ Fehler" })
     $existingFiles = @($ConvertedFiles | Where-Object { $_.Status -eq "⚠ Bereits vorhanden" })
     $cancelledFiles = @($ConvertedFiles | Where-Object { $_.Status -eq "Abgebrochen" })
     
     # Gruppierung nach Dateityp
-    $docxCount = 0
-    $xlsxCount = 0
-    $pptxCount = 0
-    
-    foreach ($file in $ConvertedFiles) {
-        switch ($file.Extension.ToLower()) {
-            ".docx" { $docxCount++ }
-            ".xlsx" { $xlsxCount++ }
-            ".pptx" { $pptxCount++ }
-        }
-    }
+    $docxCount = ($ConvertedFiles | Where-Object { $_.Extension.ToLower() -eq ".docx" }).Count
+    $xlsxCount = ($ConvertedFiles | Where-Object { $_.Extension.ToLower() -eq ".xlsx" }).Count
+    $pptxCount = ($ConvertedFiles | Where-Object { $_.Extension.ToLower() -eq ".pptx" }).Count
     
     $html = @"
 <!DOCTYPE html>
@@ -441,7 +530,7 @@ function Generate-HTMLReport {
         
         .info-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 20px;
             margin: 30px 0;
         }
@@ -469,7 +558,7 @@ function Generate-HTMLReport {
         }
         
         .info-card .value {
-            font-size: 2.5em;
+            font-size: 2.2em;
             font-weight: bold;
             color: #005a9e;
         }
@@ -484,6 +573,14 @@ function Generate-HTMLReport {
         
         .info-card.warning .value {
             color: #ff8c00;
+        }
+        
+        .info-card.deleted .value {
+            color: #8B4513;
+        }
+        
+        .info-card.moved .value {
+            color: #0078D4;
         }
         
         .progress-bar {
@@ -533,11 +630,12 @@ function Generate-HTMLReport {
         
         .filter-buttons {
             display: flex;
-            gap: 10px;
+            gap: 8px;
+            flex-wrap: wrap;
         }
         
         .filter-btn {
-            padding: 8px 16px;
+            padding: 6px 12px;
             border: 2px solid #0078D4;
             background: white;
             color: #0078D4;
@@ -545,6 +643,7 @@ function Generate-HTMLReport {
             cursor: pointer;
             transition: all 0.3s ease;
             font-weight: 600;
+            font-size: 0.85em;
         }
         
         .filter-btn:hover, .filter-btn.active {
@@ -590,6 +689,18 @@ function Generate-HTMLReport {
             color: #107c10;
         }
         
+        .status-success-deleted {
+            background: #e8f5e8;
+            color: #0d5f0d;
+            border: 1px solid #107c10;
+        }
+        
+        .status-success-moved {
+            background: #e3f2fd;
+            color: #0078D4;
+            border: 1px solid #0078D4;
+        }
+        
         .status-error {
             background: #fde7e9;
             color: #d13438;
@@ -608,7 +719,7 @@ function Generate-HTMLReport {
         .file-path {
             font-size: 0.9em;
             color: #666;
-            max-width: 400px;
+            max-width: 250px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -640,33 +751,6 @@ function Generate-HTMLReport {
             box-shadow: 0 2px 15px rgba(0,0,0,0.08);
         }
         
-        .chart-container {
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            margin: 20px 0;
-        }
-        
-        .pie-chart {
-            width: 200px;
-            height: 200px;
-            position: relative;
-        }
-        
-        @media print {
-            body {
-                background: white;
-            }
-            .filter-buttons {
-                display: none;
-            }
-            header {
-                background: #0078D4;
-                print-color-adjust: exact;
-                -webkit-print-color-adjust: exact;
-            }
-        }
-        
         @media (max-width: 768px) {
             .info-grid {
                 grid-template-columns: 1fr;
@@ -677,7 +761,16 @@ function Generate-HTMLReport {
             }
             
             .file-path {
-                max-width: 200px;
+                max-width: 150px;
+            }
+            
+            .filter-buttons {
+                justify-content: center;
+            }
+            
+            .filter-btn {
+                font-size: 0.8em;
+                padding: 4px 8px;
             }
         }
     </style>
@@ -689,7 +782,6 @@ function Generate-HTMLReport {
             <div class="subtitle">Erstellt am $timestamp</div>
         </header>
         
-        <!-- Info Box über Speicherort -->
         <div class="save-location">
             <strong>💾 Speicherort:</strong> Dieser Bericht wurde auf dem Desktop gespeichert: <code>$reportPath</code>
         </div>
@@ -710,9 +802,19 @@ function Generate-HTMLReport {
                 <div class="value">$FailCount</div>
             </div>
             
+            <div class="info-card deleted">
+                <h3>Quelldateien gelöscht</h3>
+                <div class="value">$DeletedCount</div>
+            </div>
+            
+            <div class="info-card moved">
+                <h3>Quelldateien verschoben</h3>
+                <div class="value">$MovedCount</div>
+            </div>
+            
             <div class="info-card">
                 <h3>Konvertierungsdauer</h3>
-                <div class="value">$Duration</div>
+                <div class="value" style="font-size: 1.6em;">$Duration</div>
             </div>
         </div>
         
@@ -746,6 +848,8 @@ function Generate-HTMLReport {
                 <div class="filter-buttons">
                     <button class="filter-btn active" onclick="filterTable('all')">Alle</button>
                     <button class="filter-btn" onclick="filterTable('success')">Erfolgreich</button>
+                    <button class="filter-btn" onclick="filterTable('deleted')">Mit Löschung</button>
+                    <button class="filter-btn" onclick="filterTable('moved')">Mit Verschiebung</button>
                     <button class="filter-btn" onclick="filterTable('existing')">Bereits vorhanden</button>
                     <button class="filter-btn" onclick="filterTable('error')">Fehler</button>
                 </div>
@@ -765,7 +869,9 @@ function Generate-HTMLReport {
 "@
 
     foreach ($file in $ConvertedFiles) {
-        $statusClass = switch ($file.Status) {
+        $statusClass = switch -Regex ($file.Status) {
+            "✓ Erfolgreich.*verschoben" { "success-moved" }
+            "✓ Erfolgreich.*gelöscht" { "success-deleted" }
             "✓ Erfolgreich" { "success" }
             "✗ Fehler" { "error" }
             "⚠ Bereits vorhanden" { "existing" }
@@ -792,7 +898,7 @@ function Generate-HTMLReport {
         </div>
         
         <div class="footer">
-            <p><strong>Office zu LibreOffice Konverter</strong></p>
+            <p><strong>Office zu LibreOffice Konverter v1.3</strong></p>
             <p>© 2025 Jörn Walter - <a href="https://www.der-windows-papst.de" target="_blank">www.der-windows-papst.de</a></p>
             <p style="margin-top: 10px; font-size: 0.9em;">Bericht generiert am $timestamp</p>
             <p style="margin-top: 5px; font-size: 0.8em; color: #888;">Gespeichert auf dem Desktop: $reportFileName</p>
@@ -810,6 +916,10 @@ function Generate-HTMLReport {
             rows.forEach(row => {
                 if (status === 'all') {
                     row.style.display = '';
+                } else if (status === 'deleted') {
+                    row.style.display = row.dataset.status === 'success-deleted' ? '' : 'none';
+                } else if (status === 'moved') {
+                    row.style.display = row.dataset.status === 'success-moved' ? '' : 'none';
                 } else {
                     row.style.display = row.dataset.status === status ? '' : 'none';
                 }
@@ -820,14 +930,12 @@ function Generate-HTMLReport {
 </html>
 "@
 
-    # HTML-Datei auf dem Desktop speichern
     try {
         $html | Out-File -FilePath $reportPath -Encoding UTF8
         Write-Host "Bericht erfolgreich gespeichert: $reportPath"
     }
     catch {
         Write-Warning "Fehler beim Speichern des Berichts: $_"
-        # Fallback: Temp-Ordner verwenden
         $reportPath = Join-Path $env:TEMP $reportFileName
         $html | Out-File -FilePath $reportPath -Encoding UTF8
         Write-Host "Bericht im Temp-Ordner gespeichert: $reportPath"
@@ -836,21 +944,25 @@ function Generate-HTMLReport {
     return $reportPath
 }
 
+# Erweiterte Convert-File Funktion mit Verschiebefunktion
 function Convert-File {
     param(
         [string]$InputFile,
-        [string]$OutputDir
+        [string]$OutputDir,
+        [string]$SourceAction = "keep",  # "keep", "delete", "move"
+        [string]$MoveFolder = "",
+        [bool]$CreateSubfolders = $false
     )
     
     if (-not (Test-Path $InputFile)) {
-        return @{ Success = $false; Status = "✗ Fehler"; Message = "Eingabedatei nicht gefunden" }
+        return @{ Success = $false; Status = "✗ Fehler"; Message = "Eingabedatei nicht gefunden"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
     }
     
     if (-not (Test-Path $OutputDir)) {
         try {
             New-Item -Path $OutputDir -ItemType Directory -Force | Out-Null
         } catch {
-            return @{ Success = $false; Status = "✗ Fehler"; Message = "Ausgabeordner konnte nicht erstellt werden" }
+            return @{ Success = $false; Status = "✗ Fehler"; Message = "Ausgabeordner konnte nicht erstellt werden"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
         }
     }
     
@@ -863,7 +975,7 @@ function Convert-File {
         ".xlsx" { "ods" }
         ".pptx" { "odp" }
         default { 
-            return @{ Success = $false; Status = "✗ Fehler"; Message = "Nicht unterstütztes Format: $extension" }
+            return @{ Success = $false; Status = "✗ Fehler"; Message = "Nicht unterstütztes Format: $extension"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
         }
     }
     
@@ -873,7 +985,7 @@ function Convert-File {
     
     # Prüfe ob Datei existiert
     if ((Test-Path $outputPath) -and -not $chkOverwrite.IsChecked) {
-        return @{ Success = $false; Status = "⚠ Bereits vorhanden"; Message = "Datei existiert bereits" }
+        return @{ Success = $false; Status = "⚠ Bereits vorhanden"; Message = "Datei existiert bereits"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
     }
     
     # LibreOffice Konvertierung
@@ -887,12 +999,73 @@ function Convert-File {
     try {
         $process = Start-Process -FilePath $script:libreOfficePath -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden -ErrorAction Stop
         if ($process.ExitCode -eq 0) {
-            return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich" }
+            # Konvertierung erfolgreich - handle Quelldatei basierend auf Action
+            if ($SourceAction -eq "delete") {
+                try {
+                    if (Test-Path $outputPath) {
+                        Remove-Item -Path $InputFile -Force
+                        return @{ Success = $true; Status = "✓ Erfolgreich + Quelle gelöscht"; Message = "Konvertierung erfolgreich, Quelldatei gelöscht"; SourceDeleted = $true; SourceMoved = $false; MovedTo = "" }
+                    } else {
+                        return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich (Quelldatei nicht gelöscht - Zieldatei nicht gefunden)"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
+                    }
+                } catch {
+                    return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich, aber Quelldatei konnte nicht gelöscht werden"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
+                }
+            }
+            elseif ($SourceAction -eq "move" -and -not [string]::IsNullOrWhiteSpace($MoveFolder)) {
+                try {
+                    if (Test-Path $outputPath) {
+                        # MoveFolder ist bereits vorbereitet
+                        $finalMoveFolder = $MoveFolder
+                        
+                        # Unterordner nach Dateityp erstellen wenn gewünscht
+                        if ($CreateSubfolders) {
+                            $subfolderName = switch ($extension) {
+                                ".docx" { "DOCX_Dateien" }
+                                ".xlsx" { "XLSX_Dateien" }
+                                ".pptx" { "PPTX_Dateien" }
+                            }
+                            $finalMoveFolder = Join-Path $MoveFolder $subfolderName
+                        }
+                        
+                        # Zielordner erstellen falls nicht vorhanden
+                        if (-not (Test-Path $finalMoveFolder)) {
+                            New-Item -Path $finalMoveFolder -ItemType Directory -Force | Out-Null
+                        }
+                        
+                        # Datei verschieben
+                        $movePath = Join-Path $finalMoveFolder $inputItem.Name
+                        
+                        # Falls Datei bereits im Zielordner existiert, umbenennen
+                        if (Test-Path $movePath) {
+                            $counter = 1
+                            $baseName = [System.IO.Path]::GetFileNameWithoutExtension($inputItem.Name)
+                            $fileExtension = $inputItem.Extension
+                            do {
+                                $newName = "$baseName`_$counter$fileExtension"
+                                $movePath = Join-Path $finalMoveFolder $newName
+                                $counter++
+                            } while (Test-Path $movePath)
+                        }
+                        
+                        Move-Item -Path $InputFile -Destination $movePath -Force
+                        return @{ Success = $true; Status = "✓ Erfolgreich + Quelle verschoben"; Message = "Konvertierung erfolgreich, Quelldatei verschoben"; SourceDeleted = $false; SourceMoved = $true; MovedTo = $MoveFolder }
+                    } else {
+                        return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich (Quelldatei nicht verschoben - Zieldatei nicht gefunden)"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
+                    }
+                } catch {
+                    return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich, aber Quelldatei konnte nicht verschoben werden: $($_.Exception.Message)"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
+                }
+            }
+            else {
+                # Standard: Quelldatei behalten
+                return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
+            }
         } else {
-            return @{ Success = $false; Status = "✗ Fehler"; Message = "LibreOffice Konvertierung fehlgeschlagen (Exit Code: $($process.ExitCode))" }
+            return @{ Success = $false; Status = "✗ Fehler"; Message = "LibreOffice Konvertierung fehlgeschlagen (Exit Code: $($process.ExitCode))"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
         }
     } catch {
-        return @{ Success = $false; Status = "✗ Fehler"; Message = "Fehler beim Starten von LibreOffice: $($_.Exception.Message)" }
+        return @{ Success = $false; Status = "✗ Fehler"; Message = "Fehler beim Starten von LibreOffice: $($_.Exception.Message)"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
     }
 }
 
@@ -1045,28 +1218,21 @@ $btnSelectFolder.Add_Click({
 })
 
 $btnClearFiles.Add_Click({
-    # Vollständige Bereinigung mit Tabelle
     Complete-Reset-WithTable
     
-    # Zusätzliche Bereinigungsversuche falls immer noch nicht leer
     if ($script:files.Count -gt 0 -or $dgFiles.Items.Count -gt 0) {
-        # Alternative 1: Alle Items einzeln entfernen
         while ($script:files.Count -gt 0) {
             $script:files.RemoveAt(0)
         }
         
-        # Alternative 2: DataGrid direkt leeren
         $dgFiles.Items.Clear()
         
-        # Alternative 3: Neue Collection mit Force-Update
         $script:files = New-Object System.Collections.ObjectModel.ObservableCollection[PSObject]
         $dgFiles.ItemsSource = $script:files
         
-        # Force UI Update
         [System.Windows.Forms.Application]::DoEvents()
     }
     
-    # Button-Status aktualisieren
     Update-ButtonStates
     $txtStatus.Text = "Liste geleert"
 })
@@ -1089,7 +1255,18 @@ $btnBrowseSearch.Add_Click({
     }
 })
 
-# Verbesserter Such-Event Handler mit Runspace
+# Neuer Event Handler für Verschieben-Ordner
+$btnBrowseMove.Add_Click({
+    $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+    $dialog.Description = "Wähle den Ordner für verschobene Quelldateien"
+    $dialog.SelectedPath = $txtMoveFolder.Text
+    
+    if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        $txtMoveFolder.Text = $dialog.SelectedPath
+    }
+})
+
+# Search Event Handler - Mit Debug-Ausgaben
 $btnSearch.Add_Click({
     if (-not $rbSystemWide.IsChecked) { return }
     
@@ -1099,11 +1276,23 @@ $btnSearch.Add_Click({
         return
     }
     
+    # Debug: Überprüfe Checkbox-Zustände
+    Write-Host "=== DEBUG: Checkbox-Zustände ==="
+    Write-Host "DOCX Checkbox: $($chkConvertDocx.IsChecked)"
+    Write-Host "XLSX Checkbox: $($chkConvertXlsx.IsChecked)" 
+    Write-Host "PPTX Checkbox: $($chkConvertPptx.IsChecked)"
+    
     $extensions = Get-FileExtensions
     if ($extensions.Count -eq 0) {
         [System.Windows.MessageBox]::Show("Bitte wähle mindestens einen Dateityp aus.", "Kein Dateityp", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
         return
     }
+    
+    # Debug: Zeige gewählte Extensions
+    $extensionsList = $extensions -join ", "
+    Write-Host "=== DEBUG: Suchende Extensions ==="
+    Write-Host "Extensions Array: $extensionsList"
+    Write-Host "Extensions Count: $($extensions.Count)"
     
     Complete-Reset-WithTable
     
@@ -1148,33 +1337,38 @@ $btnSearch.Add_Click({
                 
                 $sharedData.Status = "Suche nach $ext Dateien..."
                 
-                if ($sharedData.Recursive) {
-                    $foundFiles = Get-ChildItem -Path $sharedData.SearchPath -Filter $ext -File -Recurse -ErrorAction SilentlyContinue
-                } else {
-                    $foundFiles = Get-ChildItem -Path $sharedData.SearchPath -Filter $ext -File -ErrorAction SilentlyContinue
-                }
-                
-                if ($foundFiles) {
-                    foreach ($file in $foundFiles) {
-                        if ($sharedData.CancelRequested) { break }
-                        
-                        $fileInfo = @{
-                            Name = $file.Name
-                            Extension = $file.Extension
-                            Size = "{0:N2} KB" -f ($file.Length / 1KB)
-                            Path = $file.DirectoryName
-                            FullPath = $file.FullName
-                        }
-                        
-                        $sharedData.FoundFiles.Add($fileInfo) | Out-Null
-                        $totalFound++
-                        
-                        if ($totalFound % 10 -eq 0) {
-                            $elapsed = (Get-Date) - $startTime
-                            $sharedData.Status = "Gefunden: $totalFound Datei(en) | Zeit: $($elapsed.ToString('mm\:ss'))"
-                            Start-Sleep -Milliseconds 10
+                try {
+                    if ($sharedData.Recursive) {
+                        $foundFiles = Get-ChildItem -Path $sharedData.SearchPath -Filter $ext -File -Recurse -ErrorAction SilentlyContinue
+                    } else {
+                        $foundFiles = Get-ChildItem -Path $sharedData.SearchPath -Filter $ext -File -ErrorAction SilentlyContinue
+                    }
+                    
+                    if ($foundFiles) {
+                        foreach ($file in $foundFiles) {
+                            if ($sharedData.CancelRequested) { break }
+                            
+                            $fileInfo = @{
+                                Name = $file.Name
+                                Extension = $file.Extension.ToLower()  # Normalisiere Extension
+                                Size = "{0:N2} KB" -f ($file.Length / 1KB)
+                                Path = $file.DirectoryName
+                                FullPath = $file.FullName
+                            }
+                            
+                            $sharedData.FoundFiles.Add($fileInfo) | Out-Null
+                            $totalFound++
+                            
+                            if ($totalFound % 10 -eq 0) {
+                                $elapsed = (Get-Date) - $startTime
+                                $sharedData.Status = "Gefunden: $totalFound Datei(en) | Zeit: $($elapsed.ToString('mm\:ss'))"
+                                Start-Sleep -Milliseconds 10
+                            }
                         }
                     }
+                } catch {
+                    # Ignoriere Fehler bei einzelnen Ordnern und setze Suche fort
+                    continue
                 }
             }
             
@@ -1231,6 +1425,9 @@ $btnSearch.Add_Click({
                         Path = $fileInfo.Path
                         FullPath = $fileInfo.FullPath
                         Status = "Bereit"
+                        SourceDeleted = $false
+                        SourceMoved = $false
+                        MovedTo = ""
                     }
                     $script:files.Add($fileObj)
                     $addedCount++
@@ -1248,9 +1445,21 @@ $btnSearch.Add_Click({
                     if ($script:files.Count -eq 0) {
                         [System.Windows.MessageBox]::Show("Keine Dateien gefunden.", "Suche abgeschlossen", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Information)
                     } else {
+                        # Debug: Zeige alle Extensions in der Kollektion
+                        Write-Host "=== DEBUG: Alle gefundenen Dateien ==="
+                        foreach ($file in $script:files) {
+                            Write-Host "Datei: $($file.Name) | Extension: '$($file.Extension)'"
+                        }
+                        
                         $docxCount = ($script:files | Where-Object { $_.Extension -eq ".docx" }).Count
                         $xlsxCount = ($script:files | Where-Object { $_.Extension -eq ".xlsx" }).Count
                         $pptxCount = ($script:files | Where-Object { $_.Extension -eq ".pptx" }).Count
+                        
+                        Write-Host "=== DEBUG: Gezählte Dateien ==="
+                        Write-Host "DOCX Count: $docxCount"
+                        Write-Host "XLSX Count: $xlsxCount"
+                        Write-Host "PPTX Count: $pptxCount"
+                        Write-Host "Total Count: $($script:files.Count)"
                         
                         $summary = "Suche erfolgreich abgeschlossen!`n`n"
                         if ($docxCount -gt 0) { $summary += "📄 DOCX: $docxCount`n" }
@@ -1266,7 +1475,7 @@ $btnSearch.Add_Click({
             }
         } catch {
             $script:timer.Stop()
-            Complete-Reset-WithTable  # Bei Fehlern Tabelle leeren
+            Complete-Reset-WithTable
         }
     }
     
@@ -1274,7 +1483,7 @@ $btnSearch.Add_Click({
     $script:timer.Start()
 })
 
-# Konvertierungs-Event Handler
+# Convert Event Handler mit Verschiebefunktion
 $btnConvert.Add_Click({
     if ($script:files.Count -eq 0) {
         [System.Windows.MessageBox]::Show("Keine Dateien in der Liste.", "Keine Dateien", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
@@ -1285,6 +1494,50 @@ $btnConvert.Add_Click({
     if ($selectedFiles.Count -eq 0) {
         [System.Windows.MessageBox]::Show("Bitte wähle mindestens eine Datei aus.", "Keine Datei ausgewählt", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
         return
+    }
+    
+    # Bestimme Quelldateien-Aktion
+    $sourceAction = "keep"
+    $moveFolder = ""
+    $createSubfolders = $false
+    $addTimestamp = $false
+    
+    if ($rbDeleteSource.IsChecked) {
+        $sourceAction = "delete"
+        $result = [System.Windows.MessageBox]::Show(
+            "⚠️ ACHTUNG: Quelldateien löschen ist aktiviert!`n`n" +
+            "Die Originaldateien werden nach erfolgreicher Konvertierung unwiderruflich gelöscht.`n" +
+            "Stelle sicher, dass du Backups hast oder diese Funktion wirklich verwenden möchtest.`n`n" +
+            "Möchtest du mit der Konvertierung fortfahren?",
+            "Warnung: Quelldateien werden gelöscht",
+            [System.Windows.MessageBoxButton]::YesNo,
+            [System.Windows.MessageBoxImage]::Warning
+        )
+        if ($result -eq [System.Windows.MessageBoxResult]::No) { return }
+    }
+    elseif ($rbMoveSource.IsChecked) {
+        $sourceAction = "move"
+        $moveFolder = $txtMoveFolder.Text
+        $createSubfolders = $chkCreateSubfolders.IsChecked
+        $addTimestamp = $chkAddTimestamp.IsChecked
+        
+        if ([string]::IsNullOrWhiteSpace($moveFolder)) {
+            [System.Windows.MessageBox]::Show("Bitte gib einen Zielordner für das Verschieben an.", "Zielordner fehlt", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Warning)
+            return
+        }
+        
+        $result = [System.Windows.MessageBox]::Show(
+            "📦 Quelldateien verschieben ist aktiviert.`n`n" +
+            "Die Originaldateien werden nach erfolgreicher Konvertierung verschoben nach:`n" +
+            "$moveFolder`n`n" +
+            "Unterordner nach Dateityp: $($chkCreateSubfolders.IsChecked)`n" +
+            "Zeitstempel hinzufügen: $($chkAddTimestamp.IsChecked)`n`n" +
+            "Möchtest du mit der Konvertierung fortfahren?",
+            "Info: Quelldateien werden verschoben",
+            [System.Windows.MessageBoxButton]::YesNo,
+            [System.Windows.MessageBoxImage]::Question
+        )
+        if ($result -eq [System.Windows.MessageBoxResult]::No) { return }
     }
     
     $targetFolder = ""
@@ -1305,18 +1558,37 @@ $btnConvert.Add_Click({
     $btnSearch.IsEnabled = $false
     $pbProgress.Value = 0
     
+    # Einmaligen Zeitstempel für alle Dateien generieren
+    $globalTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    
+    # Finalen Verschiebe-Ordner einmalig bestimmen
+    $finalMoveFolder = $moveFolder
+    if ($sourceAction -eq "move" -and $addTimestamp -and -not [string]::IsNullOrWhiteSpace($moveFolder)) {
+        $baseName = [System.IO.Path]::GetFileNameWithoutExtension($moveFolder)
+        $parentDir = [System.IO.Path]::GetDirectoryName($moveFolder)
+        if ([string]::IsNullOrEmpty($parentDir)) { $parentDir = [System.IO.Path]::GetDirectoryName($moveFolder) }
+        $finalMoveFolder = Join-Path $parentDir "$baseName`_$globalTimestamp"
+    }
+
     # Shared Variables für Konvertierung
     $script:sharedConvertData = [hashtable]::Synchronized(@{
         Files = @($selectedFiles)
         TargetFolder = $targetFolder
         IsSystemWide = $rbSystemWide.IsChecked
         OverwriteFiles = $chkOverwrite.IsChecked
+        SourceAction = $sourceAction
+        MoveFolder = $finalMoveFolder
+        CreateSubfolders = $createSubfolders
+        AddTimestamp = $false  # Bereits verarbeitet
+        GlobalTimestamp = $globalTimestamp
         LibreOfficePath = $script:libreOfficePath
         CancelRequested = $false
         CurrentFile = 0
         TotalFiles = $selectedFiles.Count
         SuccessCount = 0
         FailCount = 0
+        DeletedCount = 0
+        MovedCount = 0
         Status = "Konvertierung läuft..."
         Completed = $false
         Error = $null
@@ -1338,18 +1610,21 @@ $btnConvert.Add_Click({
                 [string]$InputFile,
                 [string]$OutputDir,
                 [bool]$OverwriteFiles,
+                [string]$SourceAction,
+                [string]$MoveFolder,
+                [bool]$CreateSubfolders,
                 [string]$LibreOfficePath
             )
             
             if (-not (Test-Path $InputFile)) { 
-                return @{ Success = $false; Status = "✗ Fehler"; Message = "Eingabedatei nicht gefunden" }
+                return @{ Success = $false; Status = "✗ Fehler"; Message = "Eingabedatei nicht gefunden"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
             }
             
             if (-not (Test-Path $OutputDir)) {
                 try {
                     New-Item -Path $OutputDir -ItemType Directory -Force | Out-Null
                 } catch {
-                    return @{ Success = $false; Status = "✗ Fehler"; Message = "Ausgabeordner konnte nicht erstellt werden" }
+                    return @{ Success = $false; Status = "✗ Fehler"; Message = "Ausgabeordner konnte nicht erstellt werden"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
                 }
             }
             
@@ -1360,14 +1635,14 @@ $btnConvert.Add_Click({
                 ".docx" { "odt" }
                 ".xlsx" { "ods" }
                 ".pptx" { "odp" }
-                default { return @{ Success = $false; Status = "✗ Fehler"; Message = "Nicht unterstütztes Format: $extension" } }
+                default { return @{ Success = $false; Status = "✗ Fehler"; Message = "Nicht unterstütztes Format: $extension"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" } }
             }
             
             $outputName = [System.IO.Path]::GetFileNameWithoutExtension($inputItem.Name) + ".$outputFormat"
             $outputPath = Join-Path $OutputDir $outputName
             
             if ((Test-Path $outputPath) -and -not $OverwriteFiles) {
-                return @{ Success = $false; Status = "⚠ Bereits vorhanden"; Message = "Datei existiert bereits" }
+                return @{ Success = $false; Status = "⚠ Bereits vorhanden"; Message = "Datei existiert bereits"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
             }
             
             $arguments = @(
@@ -1380,12 +1655,73 @@ $btnConvert.Add_Click({
             try {
                 $process = Start-Process -FilePath $LibreOfficePath -ArgumentList $arguments -Wait -PassThru -WindowStyle Hidden -ErrorAction Stop
                 if ($process.ExitCode -eq 0) {
-                    return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich" }
+                    # Konvertierung erfolgreich - handle Quelldatei basierend auf Action
+                    if ($SourceAction -eq "delete") {
+                        try {
+                            if (Test-Path $outputPath) {
+                                Remove-Item -Path $InputFile -Force
+                                return @{ Success = $true; Status = "✓ Erfolgreich + Quelle gelöscht"; Message = "Konvertierung erfolgreich, Quelldatei gelöscht"; SourceDeleted = $true; SourceMoved = $false; MovedTo = "" }
+                            } else {
+                                return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich (Quelldatei nicht gelöscht - Zieldatei nicht gefunden)"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
+                            }
+                        } catch {
+                            return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich, aber Quelldatei konnte nicht gelöscht werden"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
+                        }
+                    }
+                    elseif ($SourceAction -eq "move" -and -not [string]::IsNullOrWhiteSpace($MoveFolder)) {
+                        try {
+                            if (Test-Path $outputPath) {
+                                # MoveFolder ist bereits vorbereitet
+                                $finalMoveFolder = $MoveFolder
+                                
+                                # Unterordner nach Dateityp erstellen wenn gewünscht
+                                if ($CreateSubfolders) {
+                                    $subfolderName = switch ($extension) {
+                                        ".docx" { "DOCX_Dateien" }
+                                        ".xlsx" { "XLSX_Dateien" }
+                                        ".pptx" { "PPTX_Dateien" }
+                                    }
+                                    $finalMoveFolder = Join-Path $MoveFolder $subfolderName
+                                }
+                                
+                                # Zielordner erstellen falls nicht vorhanden
+                                if (-not (Test-Path $finalMoveFolder)) {
+                                    New-Item -Path $finalMoveFolder -ItemType Directory -Force | Out-Null
+                                }
+                                
+                                # Datei verschieben
+                                $movePath = Join-Path $finalMoveFolder $inputItem.Name
+                                
+                                # Falls Datei bereits im Zielordner existiert, umbenennen
+                                if (Test-Path $movePath) {
+                                    $counter = 1
+                                    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($inputItem.Name)
+                                    $fileExtension = $inputItem.Extension
+                                    do {
+                                        $newName = "$baseName`_$counter$fileExtension"
+                                        $movePath = Join-Path $finalMoveFolder $newName
+                                        $counter++
+                                    } while (Test-Path $movePath)
+                                }
+                                
+                                Move-Item -Path $InputFile -Destination $movePath -Force
+                                return @{ Success = $true; Status = "✓ Erfolgreich + Quelle verschoben"; Message = "Konvertierung erfolgreich, Quelldatei verschoben"; SourceDeleted = $false; SourceMoved = $true; MovedTo = $MoveFolder }
+                            } else {
+                                return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich (Quelldatei nicht verschoben - Zieldatei nicht gefunden)"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
+                            }
+                        } catch {
+                            return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich, aber Quelldatei konnte nicht verschoben werden"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
+                        }
+                    }
+                    else {
+                        # Standard: Quelldatei behalten
+                        return @{ Success = $true; Status = "✓ Erfolgreich"; Message = "Konvertierung erfolgreich"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
+                    }
                 } else {
-                    return @{ Success = $false; Status = "✗ Fehler"; Message = "LibreOffice Konvertierung fehlgeschlagen" }
+                    return @{ Success = $false; Status = "✗ Fehler"; Message = "LibreOffice Konvertierung fehlgeschlagen"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
                 }
             } catch {
-                return @{ Success = $false; Status = "✗ Fehler"; Message = "Fehler beim Starten von LibreOffice" }
+                return @{ Success = $false; Status = "✗ Fehler"; Message = "Fehler beim Starten von LibreOffice"; SourceDeleted = $false; SourceMoved = $false; MovedTo = "" }
             }
         }
         
@@ -1395,6 +1731,9 @@ $btnConvert.Add_Click({
             foreach ($file in $sharedConvertData.Files) {
                 if ($sharedConvertData.CancelRequested) {
                     $file.Status = "Abgebrochen"
+                    $file.SourceDeleted = $false
+                    $file.SourceMoved = $false
+                    $file.MovedTo = ""
                     $sharedConvertData.Results.Add($file) | Out-Null
                     break
                 }
@@ -1404,18 +1743,28 @@ $btnConvert.Add_Click({
                 
                 $outputDir = if ($sharedConvertData.IsSystemWide) { $file.Path } else { $sharedConvertData.TargetFolder }
                 
-                $result = Convert-File -InputFile $file.FullPath -OutputDir $outputDir -OverwriteFiles $sharedConvertData.OverwriteFiles -LibreOfficePath $sharedConvertData.LibreOfficePath
+                $result = Convert-File -InputFile $file.FullPath -OutputDir $outputDir -OverwriteFiles $sharedConvertData.OverwriteFiles -SourceAction $sharedConvertData.SourceAction -MoveFolder $sharedConvertData.MoveFolder -CreateSubfolders $sharedConvertData.CreateSubfolders -LibreOfficePath $sharedConvertData.LibreOfficePath
                 
-                # Setze Status basierend auf dem detaillierten Ergebnis
+                # Setze Status und Flags basierend auf dem detaillierten Ergebnis
                 $file.Status = $result.Status
+                $file.SourceDeleted = $result.SourceDeleted
+                $file.SourceMoved = $result.SourceMoved
+                $file.MovedTo = $result.MovedTo
                 
-                # Zähle nur echte Erfolge und Fehler für die Statistik
+                # Zähle Erfolge, Fehler, gelöschte und verschobene Dateien
                 if ($result.Success) {
                     $sharedConvertData.SuccessCount++
                 } elseif ($result.Status -eq "✗ Fehler") {
                     $sharedConvertData.FailCount++
                 }
-                # "Bereits vorhanden" wird weder als Erfolg noch als Fehler gezählt
+                
+                if ($result.SourceDeleted) {
+                    $sharedConvertData.DeletedCount++
+                }
+                
+                if ($result.SourceMoved) {
+                    $sharedConvertData.MovedCount++
+                }
                 
                 # Füge die verarbeitete Datei zu den Ergebnissen hinzu
                 $sharedConvertData.Results.Add($file) | Out-Null
@@ -1431,7 +1780,17 @@ $btnConvert.Add_Click({
             if ($sharedConvertData.CancelRequested) {
                 $sharedConvertData.Status = "Konvertierung abgebrochen"
             } else {
-                $sharedConvertData.Status = "✓ Konvertierung abgeschlossen: $($sharedConvertData.SuccessCount) erfolgreich, $($sharedConvertData.FailCount) fehlgeschlagen"
+                $statusMsg = "✓ Konvertierung abgeschlossen: $($sharedConvertData.SuccessCount) erfolgreich"
+                if ($sharedConvertData.FailCount -gt 0) {
+                    $statusMsg += ", $($sharedConvertData.FailCount) fehlgeschlagen"
+                }
+                if ($sharedConvertData.DeletedCount -gt 0) {
+                    $statusMsg += ", $($sharedConvertData.DeletedCount) gelöscht"
+                }
+                if ($sharedConvertData.MovedCount -gt 0) {
+                    $statusMsg += ", $($sharedConvertData.MovedCount) verschoben"
+                }
+                $sharedConvertData.Status = $statusMsg
             }
             
         } catch {
@@ -1474,17 +1833,17 @@ $btnConvert.Add_Click({
                 $script:timer.Stop()
                 
                 if ($script:sharedConvertData.Error) {
-                    Complete-Reset-WithTable  # Bei Fehlern Tabelle leeren
+                    Complete-Reset-WithTable
                     [System.Windows.MessageBox]::Show("Fehler bei der Konvertierung: $($script:sharedConvertData.Error)", "Fehler", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
                 } else {
                     $pbProgress.Value = 100
                     
-                    # HTML-Bericht generieren - verwende die verarbeiteten Dateien aus dem Runspace
+                    # HTML-Bericht generieren
                     $convertedFiles = @($script:sharedConvertData.Results)
                     
                     if ($convertedFiles.Count -gt 0) {
                         try {
-                            $reportPath = Generate-HTMLReport -ConvertedFiles $convertedFiles -SuccessCount $script:sharedConvertData.SuccessCount -FailCount $script:sharedConvertData.FailCount -Duration $script:sharedConvertData.Duration -StartTime $script:sharedConvertData.StartTime
+                            $reportPath = Generate-HTMLReport -ConvertedFiles $convertedFiles -SuccessCount $script:sharedConvertData.SuccessCount -FailCount $script:sharedConvertData.FailCount -DeletedCount $script:sharedConvertData.DeletedCount -MovedCount $script:sharedConvertData.MovedCount -Duration $script:sharedConvertData.Duration -StartTime $script:sharedConvertData.StartTime
                         } catch {
                             $reportPath = $null
                         }
@@ -1493,45 +1852,76 @@ $btnConvert.Add_Click({
                     }
                     
                     if ($script:sharedConvertData.CancelRequested) {
-                        # Bei Abbruch: Frage den Benutzer ob Tabelle geleert werden soll
                         if ($reportPath) {
+                            $message = "Konvertierung wurde abgebrochen.`n`nBis zum Abbruch verarbeitet:`nErfolgreich: $($script:sharedConvertData.SuccessCount)`nFehlgeschlagen: $($script:sharedConvertData.FailCount)"
+                            if ($script:sharedConvertData.DeletedCount -gt 0) {
+                                $message += "`nQuelldateien gelöscht: $($script:sharedConvertData.DeletedCount)"
+                            }
+                            if ($script:sharedConvertData.MovedCount -gt 0) {
+                                $message += "`nQuelldateien verschoben: $($script:sharedConvertData.MovedCount)"
+                            }
+                            $message += "`n`nMöchtest du den HTML-Bericht öffnen?"
+                            
                             $result = [System.Windows.MessageBox]::Show(
-                                "Konvertierung wurde abgebrochen.`n`nBis zum Abbruch verarbeitet:`nErfolgreich: $($script:sharedConvertData.SuccessCount)`nFehlgeschlagen: $($script:sharedConvertData.FailCount)`n`nMöchtest du den HTML-Bericht öffnen?",
+                                $message,
                                 "Konvertierung abgebrochen",
                                 [System.Windows.MessageBoxButton]::YesNo,
                                 [System.Windows.MessageBoxImage]::Warning
                             )
                         } else {
+                            $message = "Konvertierung wurde abgebrochen.`n`nBis zum Abbruch verarbeitet:`nErfolgreich: $($script:sharedConvertData.SuccessCount)`nFehlgeschlagen: $($script:sharedConvertData.FailCount)"
+                            if ($script:sharedConvertData.DeletedCount -gt 0) {
+                                $message += "`nQuelldateien gelöscht: $($script:sharedConvertData.DeletedCount)"
+                            }
+                            if ($script:sharedConvertData.MovedCount -gt 0) {
+                                $message += "`nQuelldateien verschoben: $($script:sharedConvertData.MovedCount)"
+                            }
+                            
                             $result = [System.Windows.MessageBox]::Show(
-                                "Konvertierung wurde abgebrochen.`n`nBis zum Abbruch verarbeitet:`nErfolgreich: $($script:sharedConvertData.SuccessCount)`nFehlgeschlagen: $($script:sharedConvertData.FailCount)",
+                                $message,
                                 "Konvertierung abgebrochen",
                                 [System.Windows.MessageBoxButton]::OK,
                                 [System.Windows.MessageBoxImage]::Warning
                             )
                         }
                         
-                        # Nach Abbruch: Tabelle leeren für sauberen Zustand
                         Complete-Reset-WithTable
                         
                     } else {
-                        # Bei erfolgreichem Abschluss: Tabelle NICHT leeren (Benutzer soll Ergebnisse sehen)
                         if ($reportPath) {
+                            $message = "Konvertierung abgeschlossen!`n`nErfolgreich: $($script:sharedConvertData.SuccessCount)`nFehlgeschlagen: $($script:sharedConvertData.FailCount)"
+                            if ($script:sharedConvertData.DeletedCount -gt 0) {
+                                $message += "`nQuelldateien gelöscht: $($script:sharedConvertData.DeletedCount)"
+                            }
+                            if ($script:sharedConvertData.MovedCount -gt 0) {
+                                $message += "`nQuelldateien verschoben: $($script:sharedConvertData.MovedCount)"
+                            }
+                            $message += "`nDauer: $($script:sharedConvertData.Duration)`n`nMöchtest du den detaillierten HTML-Bericht öffnen?"
+                            
                             $result = [System.Windows.MessageBox]::Show(
-                                "Konvertierung abgeschlossen!`n`nErfolgreich: $($script:sharedConvertData.SuccessCount)`nFehlgeschlagen: $($script:sharedConvertData.FailCount)`nDauer: $($script:sharedConvertData.Duration)`n`nMöchtest du den detaillierten HTML-Bericht öffnen?",
+                                $message,
                                 "Konvertierung abgeschlossen",
                                 [System.Windows.MessageBoxButton]::YesNo,
                                 [System.Windows.MessageBoxImage]::Information
                             )
                         } else {
+                            $message = "Konvertierung abgeschlossen!`n`nErfolgreich: $($script:sharedConvertData.SuccessCount)`nFehlgeschlagen: $($script:sharedConvertData.FailCount)"
+                            if ($script:sharedConvertData.DeletedCount -gt 0) {
+                                $message += "`nQuelldateien gelöscht: $($script:sharedConvertData.DeletedCount)"
+                            }
+                            if ($script:sharedConvertData.MovedCount -gt 0) {
+                                $message += "`nQuelldateien verschoben: $($script:sharedConvertData.MovedCount)"
+                            }
+                            $message += "`nDauer: $($script:sharedConvertData.Duration)"
+                            
                             $result = [System.Windows.MessageBox]::Show(
-                                "Konvertierung abgeschlossen!`n`nErfolgreich: $($script:sharedConvertData.SuccessCount)`nFehlgeschlagen: $($script:sharedConvertData.FailCount)`nDauer: $($script:sharedConvertData.Duration)",
+                                $message,
                                 "Konvertierung abgeschlossen",
                                 [System.Windows.MessageBoxButton]::OK,
                                 [System.Windows.MessageBoxImage]::Information
                             )
                         }
                         
-                        # Bei erfolgreichem Abschluss: Nur Jobs bereinigen, Tabelle behalten (damit Benutzer Ergebnisse sehen kann)
                         Complete-Reset
                     }
                     
@@ -1542,7 +1932,7 @@ $btnConvert.Add_Click({
             }
         } catch {
             $script:timer.Stop()
-            Complete-Reset-WithTable  # Bei Fehlern Tabelle leeren
+            Complete-Reset-WithTable
         }
     }
     
@@ -1586,7 +1976,6 @@ $dgFiles.Add_MouseDoubleClick({
     $selectedItem = $dgFiles.SelectedItem
     if ($selectedItem -and $selectedItem.Path) {
         try {
-            # Öffne den Windows Explorer mit dem Ordner der ausgewählten Datei
             Start-Process "explorer.exe" -ArgumentList "`"$($selectedItem.Path)`""
         } catch {
             [System.Windows.MessageBox]::Show(
