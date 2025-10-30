@@ -1,13 +1,16 @@
 <#
 .SYNOPSIS
-  Office zu LibreOffice Konverter
+  Office zu LibreOffice Konverter - Parallel Edition
 .DESCRIPTION
  Voraussetzung: LibreOffice muss installiert sein
+ Konvertiert Office-Dateien (DOCX, XLSX, PPTX) in LibreOffice-Formate (ODT, ODS, ODP)
+ mit paralleler Verarbeitung für maximale Performance
 .PARAMETER language
 .NOTES
-  Version:        1.3
+  Version:        1.4
   Author:         Jörn Walter
   Creation Date:  2025-08-20
+  Update:         2025-10-30 - Parallele Konvertierung und Live-Dashboard
   Update:         2025-08-24 - Lösch- und Verschiebefunktion für Quelldateien
 #>
 
@@ -120,21 +123,103 @@ function Update-ButtonStates {
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-        
+
         <!-- Header -->
         <Border Grid.Row="0" Background="White" CornerRadius="5" Padding="15" Margin="0,0,0,10">
             <StackPanel>
                 <TextBlock Text="Office zu LibreOffice Konverter" FontSize="20" FontWeight="Bold" Foreground="#333"/>
                 <TextBlock Text="Konvertiert DOCX, XLSX und PPTX Dateien in LibreOffice Formate" FontSize="12" Foreground="#666" Margin="0,5,0,0"/>
                 <TextBlock FontSize="10" Foreground="#888" Margin="0,3,0,0">
-                    <Run Text="Entwickelt von Jörn Walter - Der Windows Papst (v1.3)"/>
+                    <Run Text="Entwickelt von Jörn Walter - Der Windows Papst (v1.4 - Parallel Edition)"/>
                 </TextBlock>
             </StackPanel>
         </Border>
-        
+
+        <!-- Dashboard / Statistiken -->
+        <Border Grid.Row="1" Name="borderDashboard" Background="White" CornerRadius="5" Padding="10" Margin="0,0,0,10" Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock Text="📊 Live-Statistiken" FontWeight="Bold" FontSize="14" Margin="0,0,0,10" Foreground="#0078D4"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Verarbeitete Dateien -->
+                    <Border Grid.Column="0" Background="#E3F2FD" CornerRadius="5" Padding="10" Margin="0,0,5,0">
+                        <StackPanel>
+                            <TextBlock Text="Verarbeitet" FontSize="10" Foreground="#1565C0" FontWeight="SemiBold"/>
+                            <TextBlock Name="txtDashProcessed" Text="0 / 0" FontSize="18" FontWeight="Bold" Foreground="#0078D4" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Geschwindigkeit -->
+                    <Border Grid.Column="1" Background="#E8F5E9" CornerRadius="5" Padding="10" Margin="5,0,5,0">
+                        <StackPanel>
+                            <TextBlock Text="Geschwindigkeit" FontSize="10" Foreground="#2E7D32" FontWeight="SemiBold"/>
+                            <TextBlock Name="txtDashSpeed" Text="0.0 Dateien/Sek" FontSize="18" FontWeight="Bold" Foreground="#107C10" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Verbleibende Zeit -->
+                    <Border Grid.Column="2" Background="#FFF3E0" CornerRadius="5" Padding="10" Margin="5,0,5,0">
+                        <StackPanel>
+                            <TextBlock Text="Verbleibend" FontSize="10" Foreground="#E65100" FontWeight="SemiBold"/>
+                            <TextBlock Name="txtDashRemaining" Text="--:--" FontSize="18" FontWeight="Bold" Foreground="#FF8C00" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Parallele Jobs -->
+                    <Border Grid.Column="3" Background="#F3E5F5" CornerRadius="5" Padding="10" Margin="5,0,0,0">
+                        <StackPanel>
+                            <TextBlock Text="Aktive Jobs" FontSize="10" Foreground="#6A1B9A" FontWeight="SemiBold"/>
+                            <TextBlock Name="txtDashActiveJobs" Text="0 / 4" FontSize="18" FontWeight="Bold" Foreground="#7B1FA2" Margin="0,3,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Fortschrittsbalken pro Dateityp -->
+                <StackPanel Margin="0,10,0,0">
+                    <Grid Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="50"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="DOCX" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#0078D4"/>
+                        <ProgressBar Grid.Column="1" Name="pbDocx" Height="18" Minimum="0" Maximum="100" Margin="5,0"/>
+                        <TextBlock Grid.Column="2" Name="txtDocxCount" Text="0/0" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                    </Grid>
+                    <Grid Margin="0,0,0,5">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="50"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="XLSX" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#107C10"/>
+                        <ProgressBar Grid.Column="1" Name="pbXlsx" Height="18" Minimum="0" Maximum="100" Margin="5,0"/>
+                        <TextBlock Grid.Column="2" Name="txtXlsxCount" Text="0/0" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="60"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="50"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Grid.Column="0" Text="PPTX" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#D13438"/>
+                        <ProgressBar Grid.Column="1" Name="pbPptx" Height="18" Minimum="0" Maximum="100" Margin="5,0"/>
+                        <TextBlock Grid.Column="2" Name="txtPptxCount" Text="0/0" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                    </Grid>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
         <!-- Konvertierungsmodus -->
-        <Border Grid.Row="1" Background="White" CornerRadius="5" Padding="10" Margin="0,0,0,10">
+        <Border Grid.Row="2" Background="White" CornerRadius="5" Padding="10" Margin="0,0,0,10">
             <StackPanel>
                 <TextBlock Text="Konvertierungsmodus:" FontWeight="Bold" Margin="0,0,0,5"/>
                 <WrapPanel>
@@ -174,9 +259,9 @@ function Update-ButtonStates {
                 </WrapPanel>
             </StackPanel>
         </Border>
-        
+
         <!-- Dateiliste -->
-        <Border Grid.Row="2" Background="White" CornerRadius="5" Padding="10" Height="200">
+        <Border Grid.Row="3" Background="White" CornerRadius="5" Padding="10" Height="200">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -198,9 +283,9 @@ function Update-ButtonStates {
                 </DataGrid>
             </Grid>
         </Border>
-        
+
         <!-- Konvertierungsoptionen -->
-        <Border Grid.Row="3" Background="White" CornerRadius="5" Padding="10" Margin="0,10,0,0">
+        <Border Grid.Row="4" Background="White" CornerRadius="5" Padding="10" Margin="0,10,0,0">
             <StackPanel>
                 <TextBlock Text="Konvertierungsoptionen:" FontWeight="Bold" Margin="0,0,0,5"/>
                 <WrapPanel>
@@ -211,11 +296,32 @@ function Update-ButtonStates {
                 <WrapPanel Margin="0,5,0,0">
                     <CheckBox Name="chkOverwrite" Content="Vorhandene Dateien überschreiben" Margin="5"/>
                 </WrapPanel>
+
+                <!-- Parallele Konvertierung -->
+                <Border Background="#F0F8FF" BorderBrush="#0078D4" BorderThickness="1" CornerRadius="3" Padding="8" Margin="0,10,0,0">
+                    <StackPanel>
+                        <TextBlock Text="⚡ Parallele Konvertierung" FontWeight="SemiBold" Foreground="#0078D4" Margin="0,0,0,5"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Maximale parallele Jobs:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <Slider Grid.Column="1" Name="sliderMaxJobs" Minimum="1" Maximum="16" Value="4"
+                                    TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <TextBlock Grid.Column="2" Name="txtMaxJobs" Text="4" FontWeight="Bold"
+                                       VerticalAlignment="Center" Width="25" Foreground="#0078D4"/>
+                        </Grid>
+                        <TextBlock Text="💡 Höhere Werte = schneller, aber mehr CPU/RAM-Last"
+                                   FontSize="10" Foreground="#666" FontStyle="Italic" Margin="0,3,0,0"/>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Border>
-        
+
         <!-- Quelldateien-Optionen -->
-        <Border Grid.Row="4" Background="White" CornerRadius="5" Padding="10" Margin="0,10,0,0">
+        <Border Grid.Row="5" Background="White" CornerRadius="5" Padding="10" Margin="0,10,0,0">
             <StackPanel>
                 <TextBlock Text="Quelldateien nach erfolgreicher Konvertierung:" FontWeight="Bold" Margin="0,0,0,5"/>
                 
@@ -264,28 +370,28 @@ function Update-ButtonStates {
                 </Border>
             </StackPanel>
         </Border>
-        
+
         <!-- Fortschritt -->
-        <StackPanel Grid.Row="5" Margin="0,5,0,0">
+        <StackPanel Grid.Row="6" Margin="0,5,0,0">
             <ProgressBar Name="pbProgress" Height="20" Minimum="0" Maximum="100" IsIndeterminate="False"/>
             <TextBlock Name="txtStatus" Text="Bereit" HorizontalAlignment="Center" Margin="0,3,0,0" TextWrapping="Wrap"/>
         </StackPanel>
-        
+
         <!-- Buttons -->
-        <WrapPanel Grid.Row="6" HorizontalAlignment="Center" Margin="0,5,0,0">
+        <WrapPanel Grid.Row="7" HorizontalAlignment="Center" Margin="0,5,0,0">
             <Button Name="btnConvert" Content="▶ Konvertierung starten" Width="180" Height="32" FontSize="14" FontWeight="Bold"/>
             <Button Name="btnCancel" Content="⏹ Abbrechen" Width="120" Height="32" FontSize="14" IsEnabled="False"/>
         </WrapPanel>
-        
+
         <!-- Copyright Footer -->
-        <Border Grid.Row="7" Background="#E0E0E0" CornerRadius="5" Padding="8" Margin="0,5,0,0">
+        <Border Grid.Row="8" Background="#E0E0E0" CornerRadius="5" Padding="8" Margin="0,5,0,0">
             <StackPanel>
                 <TextBlock HorizontalAlignment="Center" FontSize="10">
                     <Run Text="© 2025 Jörn Walter - " Foreground="#555"/>
                     <Hyperlink Name="lnkWebsite" NavigateUri="https://www.der-windows-papst.de" Foreground="#0078D4">
                         <Run Text="www.der-windows-papst.de"/>
                     </Hyperlink>
-                    <Run Text=" | Office zu LibreOffice Konverter v1.3" Foreground="#777"/>
+                    <Run Text=" | Office zu LibreOffice Konverter v1.4 - Parallel Edition" Foreground="#777"/>
                 </TextBlock>
             </StackPanel>
         </Border>
@@ -316,6 +422,21 @@ $chkConvertDocx = $window.FindName("chkConvertDocx")
 $chkConvertXlsx = $window.FindName("chkConvertXlsx")
 $chkConvertPptx = $window.FindName("chkConvertPptx")
 $chkOverwrite = $window.FindName("chkOverwrite")
+$sliderMaxJobs = $window.FindName("sliderMaxJobs")
+$txtMaxJobs = $window.FindName("txtMaxJobs")
+
+# Dashboard Controls
+$borderDashboard = $window.FindName("borderDashboard")
+$txtDashProcessed = $window.FindName("txtDashProcessed")
+$txtDashSpeed = $window.FindName("txtDashSpeed")
+$txtDashRemaining = $window.FindName("txtDashRemaining")
+$txtDashActiveJobs = $window.FindName("txtDashActiveJobs")
+$pbDocx = $window.FindName("pbDocx")
+$pbXlsx = $window.FindName("pbXlsx")
+$pbPptx = $window.FindName("pbPptx")
+$txtDocxCount = $window.FindName("txtDocxCount")
+$txtXlsxCount = $window.FindName("txtXlsxCount")
+$txtPptxCount = $window.FindName("txtPptxCount")
 
 # Neue Controls für Quelldateien-Optionen
 $rbKeepSource = $window.FindName("rbKeepSource")
@@ -341,10 +462,15 @@ $script:files = New-Object System.Collections.ObjectModel.ObservableCollection[P
 $script:cancelRequested = $false
 $script:searchRunspace = $null
 $script:convertRunspace = $null
+$script:runspacePool = $null
+$script:activeJobs = @()
 $script:timer = $null
 $script:libreOfficePath = Get-LibreOfficePath
 $script:sharedSearchData = $null
 $script:sharedConvertData = $null
+$script:dashboardStartTime = $null
+$script:dashboardProcessed = 0
+$script:dashboardTotal = 0
 
 # DataGrid Binding
 $dgFiles.ItemsSource = $script:files
@@ -389,6 +515,11 @@ $rbMoveSource.Add_Checked({
     $spMoveOptions.Visibility = "Visible"
     $deleteWarning.Visibility = "Collapsed"
     $moveInfo.Visibility = "Visible"
+})
+
+# Slider Event Handler
+$sliderMaxJobs.Add_ValueChanged({
+    $txtMaxJobs.Text = [int]$sliderMaxJobs.Value
 })
 
 # Hilfsfunktionen
@@ -898,7 +1029,7 @@ function Generate-HTMLReport {
         </div>
         
         <div class="footer">
-            <p><strong>Office zu LibreOffice Konverter v1.3</strong></p>
+            <p><strong>Office zu LibreOffice Konverter v1.4 - Parallel Edition</strong></p>
             <p>© 2025 Jörn Walter - <a href="https://www.der-windows-papst.de" target="_blank">www.der-windows-papst.de</a></p>
             <p style="margin-top: 10px; font-size: 0.9em;">Bericht generiert am $timestamp</p>
             <p style="margin-top: 5px; font-size: 0.8em; color: #888;">Gespeichert auf dem Desktop: $reportFileName</p>
@@ -1075,7 +1206,7 @@ function Stop-BackgroundJob {
         # WICHTIG: Alle Event-Handler vom Timer entfernen
         $script:timer.Remove_Tick
     }
-    
+
     if ($script:searchRunspace) {
         try {
             $script:searchRunspace.Close()
@@ -1083,7 +1214,7 @@ function Stop-BackgroundJob {
             $script:searchRunspace = $null
         } catch {}
     }
-    
+
     if ($script:convertRunspace) {
         try {
             $script:convertRunspace.Close()
@@ -1091,7 +1222,29 @@ function Stop-BackgroundJob {
             $script:convertRunspace = $null
         } catch {}
     }
-    
+
+    # Cleanup parallele Jobs
+    if ($script:activeJobs) {
+        foreach ($job in $script:activeJobs) {
+            try {
+                if ($job.PowerShell) {
+                    $job.PowerShell.Stop()
+                    $job.PowerShell.Dispose()
+                }
+            } catch {}
+        }
+        $script:activeJobs = @()
+    }
+
+    # Runspace Pool cleanup
+    if ($script:runspacePool) {
+        try {
+            $script:runspacePool.Close()
+            $script:runspacePool.Dispose()
+            $script:runspacePool = $null
+        } catch {}
+    }
+
     # Shared Data zurücksetzen
     $script:sharedSearchData = $null
     $script:sharedConvertData = $null
@@ -1103,7 +1256,7 @@ function Complete-Reset {
         $script:timer.Stop()
         $script:timer.Remove_Tick
     }
-    
+
     # Runspaces schließen
     if ($script:searchRunspace) {
         try {
@@ -1112,7 +1265,7 @@ function Complete-Reset {
             $script:searchRunspace = $null
         } catch {}
     }
-    
+
     if ($script:convertRunspace) {
         try {
             $script:convertRunspace.Close()
@@ -1120,11 +1273,36 @@ function Complete-Reset {
             $script:convertRunspace = $null
         } catch {}
     }
-    
+
+    # Cleanup parallele Jobs
+    if ($script:activeJobs) {
+        foreach ($job in $script:activeJobs) {
+            try {
+                if ($job.PowerShell) {
+                    $job.PowerShell.Stop()
+                    $job.PowerShell.Dispose()
+                }
+            } catch {}
+        }
+        $script:activeJobs = @()
+    }
+
+    # Runspace Pool cleanup
+    if ($script:runspacePool) {
+        try {
+            $script:runspacePool.Close()
+            $script:runspacePool.Dispose()
+            $script:runspacePool = $null
+        } catch {}
+    }
+
     # Shared Data komplett zurücksetzen
     $script:sharedSearchData = $null
     $script:sharedConvertData = $null
-    
+
+    # Dashboard ausblenden
+    $borderDashboard.Visibility = "Collapsed"
+
     # UI zurücksetzen
     $pbProgress.IsIndeterminate = $false
     $pbProgress.Value = 0
@@ -1570,7 +1748,21 @@ $btnConvert.Add_Click({
         $finalMoveFolder = Join-Path $parentDir "$baseName`_$globalTimestamp"
     }
 
-    # Shared Variables für Konvertierung
+    # Max parallele Jobs aus Slider
+    $maxParallelJobs = [int]$sliderMaxJobs.Value
+
+    # Dashboard initialisieren
+    $script:dashboardStartTime = Get-Date
+    $script:dashboardProcessed = 0
+    $script:dashboardTotal = $selectedFiles.Count
+    $borderDashboard.Visibility = "Visible"
+
+    # Statistiken nach Dateityp
+    $docxFiles = @($selectedFiles | Where-Object { $_.Extension -eq ".docx" })
+    $xlsxFiles = @($selectedFiles | Where-Object { $_.Extension -eq ".xlsx" })
+    $pptxFiles = @($selectedFiles | Where-Object { $_.Extension -eq ".pptx" })
+
+    # Shared Variables für Konvertierung (thread-safe)
     $script:sharedConvertData = [hashtable]::Synchronized(@{
         Files = @($selectedFiles)
         TargetFolder = $targetFolder
@@ -1595,17 +1787,26 @@ $btnConvert.Add_Click({
         Results = [System.Collections.ArrayList]::Synchronized((New-Object System.Collections.ArrayList))
         Duration = ""
         StartTime = (Get-Date)
+        # Erweiterte Statistiken für Dashboard
+        DocxTotal = $docxFiles.Count
+        DocxProcessed = 0
+        XlsxTotal = $xlsxFiles.Count
+        XlsxProcessed = 0
+        PptxTotal = $pptxFiles.Count
+        PptxProcessed = 0
+        ActiveJobs = 0
+        MaxJobs = $maxParallelJobs
     })
     
-    # Runspace für Konvertierung
-    $script:convertRunspace = [runspacefactory]::CreateRunspace()
-    $script:convertRunspace.Open()
-    $script:convertRunspace.SessionStateProxy.SetVariable('sharedConvertData', $script:sharedConvertData)
-    
-    $convertScript = {
-        param($sharedConvertData)
-        
-        function Convert-File {
+    # Runspace Pool für parallele Konvertierung erstellen
+    $script:runspacePool = [runspacefactory]::CreateRunspacePool(1, $maxParallelJobs)
+    $script:runspacePool.Open()
+
+    # Script für einzelne Datei-Konvertierung (läuft parallel)
+    $singleFileConvertScript = {
+        param($file, $sharedData)
+
+        function Convert-SingleFile {
             param(
                 [string]$InputFile,
                 [string]$OutputDir,
@@ -1726,86 +1927,88 @@ $btnConvert.Add_Click({
         }
         
         try {
-            $startTime = $sharedConvertData.StartTime
-            
-            foreach ($file in $sharedConvertData.Files) {
-                if ($sharedConvertData.CancelRequested) {
-                    $file.Status = "Abgebrochen"
-                    $file.SourceDeleted = $false
-                    $file.SourceMoved = $false
-                    $file.MovedTo = ""
-                    $sharedConvertData.Results.Add($file) | Out-Null
-                    break
-                }
-                
-                $sharedConvertData.CurrentFile++
-                $sharedConvertData.Status = "Konvertiere $($sharedConvertData.CurrentFile) von $($sharedConvertData.TotalFiles): $($file.Name)"
-                
-                $outputDir = if ($sharedConvertData.IsSystemWide) { $file.Path } else { $sharedConvertData.TargetFolder }
-                
-                $result = Convert-File -InputFile $file.FullPath -OutputDir $outputDir -OverwriteFiles $sharedConvertData.OverwriteFiles -SourceAction $sharedConvertData.SourceAction -MoveFolder $sharedConvertData.MoveFolder -CreateSubfolders $sharedConvertData.CreateSubfolders -LibreOfficePath $sharedConvertData.LibreOfficePath
-                
-                # Setze Status und Flags basierend auf dem detaillierten Ergebnis
-                $file.Status = $result.Status
-                $file.SourceDeleted = $result.SourceDeleted
-                $file.SourceMoved = $result.SourceMoved
-                $file.MovedTo = $result.MovedTo
-                
-                # Zähle Erfolge, Fehler, gelöschte und verschobene Dateien
-                if ($result.Success) {
-                    $sharedConvertData.SuccessCount++
-                } elseif ($result.Status -eq "✗ Fehler") {
-                    $sharedConvertData.FailCount++
-                }
-                
-                if ($result.SourceDeleted) {
-                    $sharedConvertData.DeletedCount++
-                }
-                
-                if ($result.SourceMoved) {
-                    $sharedConvertData.MovedCount++
-                }
-                
-                # Füge die verarbeitete Datei zu den Ergebnissen hinzu
-                $sharedConvertData.Results.Add($file) | Out-Null
-                
-                Start-Sleep -Milliseconds 100
+            # Abbruch-Prüfung
+            if ($sharedData.CancelRequested) {
+                $file.Status = "Abgebrochen"
+                $file.SourceDeleted = $false
+                $file.SourceMoved = $false
+                $file.MovedTo = ""
+                $sharedData.Results.Add($file) | Out-Null
+                return
             }
-            
-            $endTime = Get-Date
-            $duration = $endTime - $startTime
-            $sharedConvertData.Duration = "{0:mm\:ss}" -f $duration
-            $sharedConvertData.StartTime = $startTime
-            
-            if ($sharedConvertData.CancelRequested) {
-                $sharedConvertData.Status = "Konvertierung abgebrochen"
-            } else {
-                $statusMsg = "✓ Konvertierung abgeschlossen: $($sharedConvertData.SuccessCount) erfolgreich"
-                if ($sharedConvertData.FailCount -gt 0) {
-                    $statusMsg += ", $($sharedConvertData.FailCount) fehlgeschlagen"
-                }
-                if ($sharedConvertData.DeletedCount -gt 0) {
-                    $statusMsg += ", $($sharedConvertData.DeletedCount) gelöscht"
-                }
-                if ($sharedConvertData.MovedCount -gt 0) {
-                    $statusMsg += ", $($sharedConvertData.MovedCount) verschoben"
-                }
-                $sharedConvertData.Status = $statusMsg
+
+            # Erhöhe ActiveJobs counter
+            $sharedData.ActiveJobs++
+
+            # Output-Verzeichnis bestimmen
+            $outputDir = if ($sharedData.IsSystemWide) { $file.Path } else { $sharedData.TargetFolder }
+
+            # Konvertiere die Datei
+            $result = Convert-SingleFile -InputFile $file.FullPath -OutputDir $outputDir -OverwriteFiles $sharedData.OverwriteFiles -SourceAction $sharedData.SourceAction -MoveFolder $sharedData.MoveFolder -CreateSubfolders $sharedData.CreateSubfolders -LibreOfficePath $sharedData.LibreOfficePath
+
+            # Setze Status und Flags
+            $file.Status = $result.Status
+            $file.SourceDeleted = $result.SourceDeleted
+            $file.SourceMoved = $result.SourceMoved
+            $file.MovedTo = $result.MovedTo
+
+            # Thread-sicher Zähler erhöhen
+            if ($result.Success) {
+                $sharedData.SuccessCount++
+            } elseif ($result.Status -eq "✗ Fehler") {
+                $sharedData.FailCount++
             }
-            
+
+            if ($result.SourceDeleted) {
+                $sharedData.DeletedCount++
+            }
+
+            if ($result.SourceMoved) {
+                $sharedData.MovedCount++
+            }
+
+            # Statistiken nach Dateityp aktualisieren
+            $extension = $file.Extension.ToLower()
+            if ($extension -eq ".docx") {
+                $sharedData.DocxProcessed++
+            } elseif ($extension -eq ".xlsx") {
+                $sharedData.XlsxProcessed++
+            } elseif ($extension -eq ".pptx") {
+                $sharedData.PptxProcessed++
+            }
+
+            # Gesamtzähler
+            $sharedData.CurrentFile++
+            $sharedData.Results.Add($file) | Out-Null
+
         } catch {
-            $sharedConvertData.Error = $_.Exception.Message
-            $sharedConvertData.Status = "❌ Fehler bei der Konvertierung"
+            $file.Status = "✗ Fehler: $($_.Exception.Message)"
+            $sharedData.FailCount++
+            $sharedData.CurrentFile++
+            $sharedData.Results.Add($file) | Out-Null
         } finally {
-            $sharedConvertData.Completed = $true
+            # Reduziere ActiveJobs counter
+            $sharedData.ActiveJobs--
         }
     }
-    
-    $convertPowerShell = [powershell]::Create()
-    $convertPowerShell.Runspace = $script:convertRunspace
-    $convertPowerShell.AddScript($convertScript).AddArgument($script:sharedConvertData) | Out-Null
-    $convertPowerShell.BeginInvoke() | Out-Null
-    
+
+    # Jobs für alle Dateien starten (parallel)
+    $jobs = @()
+    foreach ($file in $selectedFiles) {
+        $powerShell = [powershell]::Create()
+        $powerShell.RunspacePool = $script:runspacePool
+        $powerShell.AddScript($singleFileConvertScript).AddArgument($file).AddArgument($script:sharedConvertData) | Out-Null
+
+        $jobs += [PSCustomObject]@{
+            PowerShell = $powerShell
+            Handle = $powerShell.BeginInvoke()
+            File = $file
+        }
+    }
+
+    # Speichere Jobs für Timer-Zugriff
+    $script:activeJobs = $jobs
+
     # Timer für Konvertierungs-Updates
     if ($script:timer.IsEnabled) {
         $script:timer.Stop()
@@ -1813,24 +2016,91 @@ $btnConvert.Add_Click({
     
     $script:timer.Remove_Tick
     
-    # Event Handler für Konvertierung
+    # Event Handler für Konvertierung mit Dashboard-Updates
     $convertTimerTick = {
         try {
-            if ($script:sharedConvertData -eq $null) { 
-                return 
+            if ($script:sharedConvertData -eq $null) {
+                return
             }
-            
-            $txtStatus.Text = $script:sharedConvertData.Status
-            
-            if ($script:sharedConvertData.TotalFiles -gt 0) {
-                $pbProgress.Value = ($script:sharedConvertData.CurrentFile / $script:sharedConvertData.TotalFiles) * 100
+
+            # Dashboard-Updates
+            $processed = $script:sharedConvertData.CurrentFile
+            $total = $script:sharedConvertData.TotalFiles
+            $txtDashProcessed.Text = "$processed / $total"
+
+            # Geschwindigkeit berechnen
+            $elapsed = (Get-Date) - $script:dashboardStartTime
+            if ($elapsed.TotalSeconds -gt 0 -and $processed -gt 0) {
+                $speed = $processed / $elapsed.TotalSeconds
+                $txtDashSpeed.Text = "$($speed.ToString('0.0')) Dateien/Sek"
+
+                # Verbleibende Zeit
+                $remaining = $total - $processed
+                if ($speed -gt 0) {
+                    $remainingSeconds = $remaining / $speed
+                    $txtDashRemaining.Text = [TimeSpan]::FromSeconds($remainingSeconds).ToString('mm\:ss')
+                }
             }
-            
+
+            # Aktive Jobs
+            $activeJobsCount = $script:sharedConvertData.ActiveJobs
+            $txtDashActiveJobs.Text = "$activeJobsCount / $($script:sharedConvertData.MaxJobs)"
+
+            # Fortschritt pro Dateityp
+            if ($script:sharedConvertData.DocxTotal -gt 0) {
+                $pbDocx.Value = ($script:sharedConvertData.DocxProcessed / $script:sharedConvertData.DocxTotal) * 100
+                $txtDocxCount.Text = "$($script:sharedConvertData.DocxProcessed)/$($script:sharedConvertData.DocxTotal)"
+            }
+            if ($script:sharedConvertData.XlsxTotal -gt 0) {
+                $pbXlsx.Value = ($script:sharedConvertData.XlsxProcessed / $script:sharedConvertData.XlsxTotal) * 100
+                $txtXlsxCount.Text = "$($script:sharedConvertData.XlsxProcessed)/$($script:sharedConvertData.XlsxTotal)"
+            }
+            if ($script:sharedConvertData.PptxTotal -gt 0) {
+                $pbPptx.Value = ($script:sharedConvertData.PptxProcessed / $script:sharedConvertData.PptxTotal) * 100
+                $txtPptxCount.Text = "$($script:sharedConvertData.PptxProcessed)/$($script:sharedConvertData.PptxTotal)"
+            }
+
+            # Gesamt-Fortschritt
+            if ($total -gt 0) {
+                $pbProgress.Value = ($processed / $total) * 100
+            }
+
+            $txtStatus.Text = "Konvertiere $processed von $total Dateien... (Erfolg: $($script:sharedConvertData.SuccessCount), Fehler: $($script:sharedConvertData.FailCount))"
+
             # DataGrid refresh
             $dgFiles.Items.Refresh()
-            
-            if ($script:sharedConvertData.Completed) {
+
+            # Prüfe ob alle Jobs fertig sind
+            $allJobsCompleted = $true
+            foreach ($job in $script:activeJobs) {
+                if (-not $job.Handle.IsCompleted) {
+                    $allJobsCompleted = $false
+                    break
+                }
+            }
+
+            if ($allJobsCompleted) {
                 $script:timer.Stop()
+
+                # Cleanup: PowerShell-Objekte beenden
+                foreach ($job in $script:activeJobs) {
+                    try {
+                        $job.PowerShell.EndInvoke($job.Handle)
+                        $job.PowerShell.Dispose()
+                    } catch {}
+                }
+
+                # Runspace Pool schließen
+                if ($script:runspacePool) {
+                    $script:runspacePool.Close()
+                    $script:runspacePool.Dispose()
+                    $script:runspacePool = $null
+                }
+
+                # Berechne Gesamtdauer
+                $endTime = Get-Date
+                $duration = $endTime - $script:sharedConvertData.StartTime
+                $script:sharedConvertData.Duration = "{0:mm\:ss}" -f $duration
                 
                 if ($script:sharedConvertData.Error) {
                     Complete-Reset-WithTable
